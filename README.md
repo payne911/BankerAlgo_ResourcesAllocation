@@ -9,3 +9,5 @@ Implementing the Banker Algorithm to properly allocate ressources (avoiding dead
 4. Agree with the new project using the files already in the folder as the source.
 5. The `Missing CMake file` warning message at the top should be taken care of: select the blue link at the top right and select the `CMakeLists.txt` of the cloned project.
 6. You're done! :)
+
+*The step 5 is actually unresolved yet. The current `CMakeLists.txt` file does not work properly.*
