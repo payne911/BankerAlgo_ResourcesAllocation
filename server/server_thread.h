@@ -1,7 +1,7 @@
 #ifndef SERVER_THREAD_H
 #define SERVER_THREAD_H
 
-#include "common.h"
+#include "../common/common.h"
 
 extern bool accepting_connections;
 

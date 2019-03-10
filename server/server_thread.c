@@ -1,6 +1,6 @@
 //#define _XOPEN_SOURCE 700   /* So as to allow use of `fdopen` and `getline`.  */
 
-#include "common.h"
+#include "../common/common.h"
 #include "server_thread.h"
 
 #include <netinet/in.h>

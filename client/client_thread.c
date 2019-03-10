@@ -41,8 +41,7 @@ send_request (int client_id, int request_id, int socket_fd)
 
   // TP2 TODO
 
-  fprintf (stdout, "Client %d is sending its %d request\n", client_id,
-      request_id);
+  fprintf (stdout, "Client %d is sending its %d request\n", client_id, request_id);
 
   // TP2 TODO:END
 
@@ -118,8 +117,7 @@ ct_create_and_start (client_thread * ct)
 }
 
 //
-// Affiche les données recueillies lors de l'exécution du
-// serveur.
+// Affiche les données recueillies lors de l'exécution du serveur.
 // La branche else ne doit PAS être modifiée.
 //
 void

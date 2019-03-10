@@ -1,7 +1,7 @@
 #ifndef CLIENTTHREAD_H
 #define CLIENTTHREAD_H
 
-#include "common.h"
+#include "../common/common.h"
 
 /* Port TCP sur lequel le serveur attend des connections.  */
 extern int port_number;

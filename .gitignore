@@ -2,6 +2,10 @@ build/
 .idea/
 cmake-build-debug/
 
+# Monnier
+*.aux
+*.log
+
 # Prerequisites
 *.d
 
