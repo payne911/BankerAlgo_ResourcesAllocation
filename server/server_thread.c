@@ -20,9 +20,9 @@
 enum { NUL = '\0' };
 
 enum {
-  /* Configuration constants.  */
-  max_wait_time = 30,
-  server_backlog_size = 5
+    /* Configuration constants.  */
+    max_wait_time = 30,
+    server_backlog_size = 5
 };
 
 unsigned int server_socket_fd;
@@ -58,107 +58,105 @@ int *available;
 void
 st_init ()
 {
-  // Initialise le nombre de clients connecté.
-  nb_registered_clients = 0;
+    // Initialise le nombre de clients connecté.
+    nb_registered_clients = 0;
 
-  // TODO
+    // TODO
 
-  // Attend la connection d'un client et initialise les structures pour
-  // l'algorithme du banquier.
+    // Attend la connection d'un client et initialise les structures pour
+    // l'algorithme du banquier.
 
 
     // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
 
 
 
-  // END TODO
+    // END TODO
 }
 
 void
 st_process_requests (server_thread * st, int socket_fd)
 {
-  // TODO: Remplacer le contenu de cette fonction
-  struct pollfd fds[1];
-  fds->fd = socket_fd;
-  fds->events = POLLIN;
-  fds->revents = 0;
+    // TODO: Remplacer le contenu de cette fonction
+    struct pollfd fds[1];
+    fds->fd = socket_fd;
+    fds->events = POLLIN;
+    fds->revents = 0;
 
-  for (;;) {
-    struct cmd_header_t header = { .nb_args = 0 };
+    for (;;) {
+        struct cmd_header_t header = { .nb_args = 0 };
 
-    int len = read_socket(socket_fd, &header, sizeof(header), max_wait_time * 1000);
-    if (len > 0) {
-      if (len != sizeof(header.cmd) && len != sizeof(header)) {
-        printf ("Thread %d received invalid command size=%d!\n", st->id, len);
-        break;
-      }
-      printf("Thread %d received command=%d, nb_args=%d\n", st->id, header.cmd, header.nb_args);
-      // dispatch of cmd void thunk(int sockfd, struct cmd_header* header);
-    } else {
-      if (len == 0) {
-        fprintf(stderr, "Thread %d, connection timeout\n", st->id);
-      }
-      break;
+        int len = read_socket(socket_fd, &header, sizeof(header), max_wait_time * 1000);
+        if (len > 0) {
+            if (len != sizeof(header.cmd) && len != sizeof(header)) {
+                printf ("Thread %d received invalid command size=%d!\n", st->id, len);
+                break;
+            }
+            printf("Thread %d received command=%d, nb_args=%d\n", st->id, header.cmd, header.nb_args);
+            // dispatch of cmd void thunk(int sockfd, struct cmd_header* header);
+        } else {
+            if (len == 0) {
+                fprintf(stderr, "Thread %d, connection timeout\n", st->id);
+            }
+            break;
+        }
     }
-  }
-  close(socket_fd);
+    close(socket_fd);
 }
 
 
 void
 st_signal ()
 {
-  // TODO: Remplacer le contenu de cette fonction
+    // TODO: Remplacer le contenu de cette fonction
 
-  /* Signale aux clients de se terminer. (Selon `server\main.c`) */
+    /* Signale aux clients de se terminer. (Selon `server\main.c`) */
 
 
 
-  // TODO end
+    // TODO end
 }
 
 void *
 st_code (void *param)
 {
-  server_thread *st = (server_thread *) param;
+    server_thread *st = (server_thread *) param;
 
-  struct sockaddr_in thread_addr;
-  socklen_t socket_len = sizeof (thread_addr);
-  int thread_socket_fd = -1;
-  int end_time = time (NULL) + max_wait_time;
+    struct sockaddr_in thread_addr;
+    socklen_t socket_len = sizeof (thread_addr);
+    int thread_socket_fd = -1;
+    int end_time = time (NULL) + max_wait_time;
 
-  // Boucle jusqu'à ce que `accept` reçoive la première connection.
-  while (thread_socket_fd < 0)
-  {
-    thread_socket_fd =
-      accept (server_socket_fd, (struct sockaddr *) &thread_addr,
-          &socket_len);
-
-    if (time (NULL) >= end_time)
+    // Boucle jusqu'à ce que `accept` reçoive la première connection.
+    while (thread_socket_fd < 0)
     {
-      break;
-    }
-  }
+        thread_socket_fd =
+                accept (server_socket_fd, (struct sockaddr *) &thread_addr, &socket_len);
 
-  // Boucle de traitement des requêtes.
-  while (accepting_connections)
-  {
-    if (!nb_registered_clients && time (NULL) >= end_time)
-    {
-      fprintf (stderr, "Time out on thread %d.\n", st->id);
-      pthread_exit (NULL);
+        if (time (NULL) >= end_time)
+        {
+            break;
+        }
     }
-    if (thread_socket_fd > 0)
+
+    // Boucle de traitement des requêtes.
+    while (accepting_connections)
     {
-      st_process_requests (st, thread_socket_fd);
-      close (thread_socket_fd);
-      end_time = time (NULL) + max_wait_time;
+        if (!nb_registered_clients && time (NULL) >= end_time)
+        {
+            fprintf (stderr, "Time out on thread %d.\n", st->id);
+            pthread_exit (NULL);
+        }
+        if (thread_socket_fd > 0)
+        {
+            st_process_requests (st, thread_socket_fd);
+            close (thread_socket_fd);
+            end_time = time (NULL) + max_wait_time;
+        }
+        thread_socket_fd =
+                accept (server_socket_fd, (struct sockaddr *) &thread_addr, &socket_len);
     }
-    thread_socket_fd =
-      accept (server_socket_fd, (struct sockaddr *) &thread_addr,
-          &socket_len);
-  }
-  return NULL;
+    return NULL;
 }
 
 
@@ -168,52 +166,49 @@ st_code (void *param)
 void
 st_open_socket (int port_number)
 {
-  server_socket_fd = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-  if (server_socket_fd < 0)
-    perror ("ERROR opening socket");
+    server_socket_fd = socket (AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (server_socket_fd < 0)
+        perror ("ERROR opening socket");
 
-  /* todo: verify I could replace "SO_REUSEPORT" with "SO_REUSEADDR" */
-  if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0) {
-    perror("setsockopt()");
-    exit(1);
-  }
+    /* todo: verify I could replace "SO_REUSEPORT" with "SO_REUSEADDR" */
+    if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0) {
+        perror("setsockopt()");
+        exit(1);
+    }
 
-  struct sockaddr_in serv_addr;
-  memset (&serv_addr, 0, sizeof (serv_addr));
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = INADDR_ANY;
-  serv_addr.sin_port = htons (port_number);
+    struct sockaddr_in serv_addr;
+    memset (&serv_addr, 0, sizeof (serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons (port_number);
 
-  if (bind
-      (server_socket_fd, (struct sockaddr *) &serv_addr,
-       sizeof (serv_addr)) < 0)
-    perror ("ERROR on binding");
+    if (bind(server_socket_fd, (struct sockaddr *) &serv_addr, sizeof (serv_addr)) < 0)
+        perror ("ERROR on binding");
 
-  listen (server_socket_fd, server_backlog_size);
+    listen (server_socket_fd, server_backlog_size);
 }
 
 
 //
-// Affiche les données recueillies lors de l'exécution du
-// serveur.
+// Affiche les données recueillies lors de l'exécution du serveur.
 // La branche else ne doit PAS être modifiée.
 //
 void
 st_print_results (FILE * fd, bool verbose)
 {
-  if (fd == NULL) fd = stdout;
-  if (verbose)
-  {
-    fprintf (fd, "\n---- Résultat du serveur ----\n");
-    fprintf (fd, "Requêtes acceptées: %d\n", count_accepted);
-    fprintf (fd, "Requêtes : %d\n", count_wait);
-    fprintf (fd, "Requêtes invalides: %d\n", count_invalid);
-    fprintf (fd, "Clients : %d\n", count_dispatched);
-    fprintf (fd, "Requêtes traitées: %d\n", request_processed);
-  }
-  else
-  {
-    fprintf (fd, "%d %d %d %d %d\n", count_accepted, count_wait,
-        count_invalid, count_dispatched, request_processed);
-  }
+    if (fd == NULL) fd = stdout;
+    if (verbose)
+    {
+        fprintf (fd, "\n---- Résultat du serveur ----\n");
+        fprintf (fd, "Requêtes acceptées: %d\n", count_accepted);
+        fprintf (fd, "Requêtes : %d\n", count_wait);
+        fprintf (fd, "Requêtes invalides: %d\n", count_invalid);
+        fprintf (fd, "Clients : %d\n", count_dispatched);
+        fprintf (fd, "Requêtes traitées: %d\n", request_processed);
+    }
+    else
+    {
+        fprintf (fd, "%d %d %d %d %d\n", count_accepted, count_wait,
+                 count_invalid, count_dispatched, request_processed);
+    }
 }
