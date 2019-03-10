@@ -43,6 +43,7 @@ send_request (int client_id, int request_id, int socket_fd)
 
   fprintf (stdout, "Client %d is sending its %d request\n", client_id, request_id);
 
+
   // TP2 TODO:END
 
 }
@@ -59,8 +60,7 @@ ct_code (void *param)
   // Vous devez ici faire l'initialisation des petits clients (`INI`).
   // TP2 TODO:END
 
-  for (unsigned int request_id = 0; request_id < num_request_per_client;
-      request_id++)
+  for (unsigned int request_id = 0; request_id < num_request_per_client; request_id++)
   {
 
     // TP2 TODO

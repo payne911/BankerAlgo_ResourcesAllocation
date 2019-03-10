@@ -30,7 +30,9 @@ unsigned int server_socket_fd;
 // Nombre de client enregistré.
 int nb_registered_clients;
 
-// Variable du journal.
+
+/* Variable du journal. */
+
 // Nombre de requêtes acceptées immédiatement (ACK envoyé en réponse à REQ).
 unsigned int count_accepted = 0;
 
@@ -63,6 +65,11 @@ st_init ()
 
   // Attend la connection d'un client et initialise les structures pour
   // l'algorithme du banquier.
+
+
+    // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
+
+
 
   // END TODO
 }
@@ -102,6 +109,8 @@ void
 st_signal ()
 {
   // TODO: Remplacer le contenu de cette fonction
+
+  /* Signale aux clients de se terminer. (Selon `server\main.c`) */
 
 
 
@@ -163,7 +172,8 @@ st_open_socket (int port_number)
   if (server_socket_fd < 0)
     perror ("ERROR opening socket");
 
-  if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0) {
+  /* todo: verify I could replace "SO_REUSEPORT" with "SO_REUSEADDR" */
+  if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0) {
     perror("setsockopt()");
     exit(1);
   }
