@@ -21,7 +21,7 @@ enum { NUL = '\0' };
 
 enum {
     /* Configuration constants.  */
-    max_wait_time = 30,
+    max_wait_time = 7, // todo: was 30
     server_backlog_size = 5
 };
 
@@ -53,7 +53,13 @@ unsigned int request_processed = 0;
 unsigned int clients_ended = 0;
 
 // TODO: Ajouter vos structures de données partagées, ici.
-int *available;
+int nbr_processus;  //       : n     : amount of processes
+int nbr_types_res;  //       : m     : amount of types of resources
+int *available;     // [j]   : m     : qty of res 'j' available
+int **max;          // [i,j] : n x m : max qty of res 'j' used by 'i'
+int **alloc;        // [i,j] : n x m : qty of res 'j' allocated to 'i'
+int **needed;       // [i,j] : n x m : needed[i,j] = max[i,j] - alloc[i,j]
+
 
 void
 st_init ()
@@ -66,7 +72,10 @@ st_init ()
     // Attend la connection d'un client et initialise les structures pour
     // l'algorithme du banquier.
 
-
+    struct cmd_header_t test_data;
+    char test[100];
+    read_socket(server_socket_fd, &test, sizeof(test), 4 * 1000);
+    printf("test: %s\n", test);
     // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
 
 
