@@ -43,6 +43,14 @@ send_request (int client_id, int request_id, int socket_fd)
 
     fprintf (stdout, "Client %d is sending its %d request\n", client_id, request_id);
 
+    struct cmd_header_t reading_data;
+    struct cmd_header_t writing_data;
+
+    //REQ
+    writing_data.cmd = REQ;
+    writing_data.nb_args = num_resources + 1;
+
+
 
     // TP2 TODO:END
 

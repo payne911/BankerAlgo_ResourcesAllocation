@@ -53,6 +53,7 @@ unsigned int request_processed = 0;
 unsigned int clients_ended = 0;
 
 // TODO: Ajouter vos structures de données partagées, ici.
+/*  nbr_processus might be equivalent to `nb_registered_clients` */
 int nbr_processus;  //       : n     : amount of processes
 int nbr_types_res;  //       : m     : amount of types of resources
 int *available;     // [j]   : m     : qty of res 'j' available
@@ -60,6 +61,7 @@ int **max;          // [i,j] : n x m : max qty of res 'j' used by 'i'
 int **alloc;        // [i,j] : n x m : qty of res 'j' allocated to 'i'
 int **needed;       // [i,j] : n x m : needed[i,j] = max[i,j] - alloc[i,j]
 
+pthread_mutex_t lock;
 
 void
 st_init ()
@@ -73,15 +75,59 @@ st_init ()
     // l'algorithme du banquier.
 
     struct cmd_header_t test_data;
-    char test[100];
+    char test[250];
     read_socket(server_socket_fd, &test, sizeof(test), 4 * 1000);
     printf("test: %s\n", test);
     // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
+    // todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
 
+
+
+
+
+    //nbr_processus = 0; <-- todo: currently considering it equivalent to `nb_registered_clients`
+    nbr_types_res = 0;
+
+    // pre-calculating the sizes to malloc
+    size_t line_size = nbr_types_res * sizeof(int);
+    size_t matrix_size = nb_registered_clients * sizeof(int);
+
+    // todo: check malloc for failure || todo: maybe use `calloc` since init=0 ?
+    available = malloc(line_size); //size_t matrix_size = nb_registered_clients * sizeof(available);
+    max       = malloc(matrix_size);
+    alloc     = malloc(matrix_size);
+    needed    = malloc(matrix_size);
+
+    printf("sizes: %zu  |  %zu\n", line_size, matrix_size);
+
+    for (int i = 0; i < nbr_types_res; i++) {
+        available[i] = 0;
+    }
+
+    for (int i = 0; i < nb_registered_clients; i++) {
+        max[i]    = malloc(line_size);
+        alloc[i]  = malloc(line_size);
+        needed[i] = malloc(line_size);
+
+        for (int j = 0; j < nbr_types_res; j++) {
+            max[i][j]    = 0;
+            alloc[i][j]  = 0;
+            needed[i][j] = 0;
+        }
+    }
 
 
     // END TODO
 }
+
+
+//void computeNeeded(int need[P][R], int maxm[P][R], int allot[P][R]) {
+//    for (int i = 0 ; i < P ; i++)
+//        for (int j = 0 ; j < R ; j++)
+//            // Need of instance = maxm instance - allocated instance
+//            need[i][j] = maxm[i][j] - allot[i][j];
+//}
+
 
 void
 st_process_requests (server_thread * st, int socket_fd)
@@ -92,7 +138,7 @@ st_process_requests (server_thread * st, int socket_fd)
     fds->events = POLLIN;
     fds->revents = 0;
 
-    for (;;) {
+    while(true) {
         struct cmd_header_t header = { .nb_args = 0 };
 
         int len = read_socket(socket_fd, &header, sizeof(header), max_wait_time * 1000);
