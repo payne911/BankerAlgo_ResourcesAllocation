@@ -20,7 +20,7 @@
 enum { NUL = '\0' };
 
 enum {
-    /* Configuration constants.  */
+    /* Configuration constants. */
     max_wait_time = 7, // todo: was 30
     server_backlog_size = 5
 };
@@ -36,32 +36,50 @@ int nb_registered_clients;
 // Nombre de requêtes acceptées immédiatement (ACK envoyé en réponse à REQ).
 unsigned int count_accepted = 0;
 
-// Nombre de requêtes acceptées après un délai (ACK après REQ, mais retardé).
+// Nbr de requêtes acceptées après un délai (ACK après REQ, mais retardé).
 unsigned int count_wait = 0;
 
-// Nombre de requête erronées (ERR envoyé en réponse à REQ).
+// Nbr de requête erronées (ERR envoyé en réponse à REQ).
 unsigned int count_invalid = 0;
 
-// Nombre de clients qui se sont terminés correctement
-// (ACK envoyé en réponse à CLO).
+// Nbr de clients qui se sont terminés correctement (ACK envoyé en réponse à CLO).
 unsigned int count_dispatched = 0;
 
-// Nombre total de requête (REQ) traités.
+// Nbr total de requête (REQ) traités.
 unsigned int request_processed = 0;
 
-// Nombre de clients ayant envoyé le message CLO.
+// Nbr de clients ayant envoyé le message CLO.
 unsigned int clients_ended = 0;
 
+
+
 // TODO: Ajouter vos structures de données partagées, ici.
-/*  nbr_processus might be equivalent to `nb_registered_clients` */
-int nbr_processus;  //       : n     : amount of processes
+
+// #proc = #_reg_clients     : n     : amount of processes
 int nbr_types_res;  //       : m     : amount of types of resources
 int *available;     // [j]   : m     : qty of res 'j' available
 int **max;          // [i,j] : n x m : max qty of res 'j' used by 'i'
 int **alloc;        // [i,j] : n x m : qty of res 'j' allocated to 'i'
 int **needed;       // [i,j] : n x m : needed[i,j] = max[i,j] - alloc[i,j]
 
+
+typedef struct client { // todo: try to integrate this other approach instead?
+    int id; // todo: necessary ?
+    int *alloc;
+    int *max;
+    int *needed;
+    bool visited; // todo: why? maybe remove
+} client;
+
 pthread_mutex_t lock;
+
+frame cmd_r; // received
+frame cmd_s; // sent
+
+#define READ_TIMEOUT 4000 // 4 sec
+
+
+
 
 void
 st_init ()
@@ -74,26 +92,33 @@ st_init ()
     // Attend la connection d'un client et initialise les structures pour
     // l'algorithme du banquier.
 
-    struct cmd_header_t test_data;
-    char test[250];
-    read_socket(server_socket_fd, &test, sizeof(test), 4 * 1000);
-    printf("test: %s\n", test);
+//    char test[250];
+//    read_socket(server_socket_fd, &test, sizeof(test), READ_TIMEOUT);
+//    printf("test: %s\n", test);
     // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
     // todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
 
+//    while(true) {
+//        int ret = read_socket(server_socket_fd, &cmd_r, sizeof(cmd_r), READ_TIMEOUT);
+//        if(ret > 0) {
+//            printf("%d\n",ret);
+//            printf("%d %d %d\n", cmd_r.header.cmd, cmd_r.header.nb_args, cmd_r.args[0]);
+//            break;
+//        } else {
+//            printf("bug\n");
+//        }
+//    }
 
 
-
-
-    //nbr_processus = 0; <-- todo: currently considering it equivalent to `nb_registered_clients`
+    /* Initializing the Banker-Algo's variables. */
     nbr_types_res = 0;
 
     // pre-calculating the sizes to malloc
-    size_t line_size = nbr_types_res * sizeof(int);
+    size_t line_size   = nbr_types_res * sizeof(int);
     size_t matrix_size = nb_registered_clients * sizeof(int);
 
-    // todo: check malloc for failure || todo: maybe use `calloc` since init=0 ?
-    available = malloc(line_size); //size_t matrix_size = nb_registered_clients * sizeof(available);
+    // todo: OOM
+    available = malloc(line_size);
     max       = malloc(matrix_size);
     alloc     = malloc(matrix_size);
     needed    = malloc(matrix_size);
@@ -101,7 +126,7 @@ st_init ()
     printf("sizes: %zu  |  %zu\n", line_size, matrix_size);
 
     for (int i = 0; i < nbr_types_res; i++) {
-        available[i] = 0;
+        available[i] = 0; // todo: use calloc instead?
     }
 
     for (int i = 0; i < nb_registered_clients; i++) {
@@ -109,7 +134,7 @@ st_init ()
         alloc[i]  = malloc(line_size);
         needed[i] = malloc(line_size);
 
-        for (int j = 0; j < nbr_types_res; j++) {
+        for (int j = 0; j < nbr_types_res; j++) { // todo: use calloc instead?
             max[i][j]    = 0;
             alloc[i][j]  = 0;
             needed[i][j] = 0;
@@ -166,7 +191,7 @@ st_signal ()
     // TODO: Remplacer le contenu de cette fonction
 
     /* Signale aux clients de se terminer. (Selon `server\main.c`) */
-
+    printf("entered st_signal()\n");
 
 
     // TODO end
@@ -225,8 +250,8 @@ st_open_socket (int port_number)
     if (server_socket_fd < 0)
         perror ("ERROR opening socket");
 
-    /* todo: verify I could replace "SO_REUSEPORT" with "SO_REUSEADDR" */
-    if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int)) < 0) {
+    /* todo: verify if should replace "SO_REUSEPORT" with "SO_REUSEADDR" */
+    if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0) {
         perror("setsockopt()");
         exit(1);
     }

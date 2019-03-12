@@ -27,9 +27,15 @@ enum cmd_type {
 };
 
 typedef struct cmd_header_t {
-  enum cmd_type cmd;
-  int nb_args;
+    enum cmd_type cmd;
+    int nb_args;
 } cmd_header_t;
+
+// generic frame struct
+typedef struct frame {
+    cmd_header_t header;
+    int* args;
+} frame;
 
 ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout);
 

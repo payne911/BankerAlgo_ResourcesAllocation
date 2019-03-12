@@ -1,4 +1,3 @@
-
 #include "client_thread.h"
 #include <stdlib.h>
 
@@ -34,14 +33,14 @@ main (int argc, char *argv[argc + 1])
     ct_wait_server ();
 
     // Affiche le journal.
-    st_print_results (stdout, true);
+    ct_print_results (stdout, true);
     FILE *fp = fopen("client.log", "w");
     if (fp == NULL)
     {
         fprintf(stderr, "Could not print log");
         return EXIT_FAILURE;
     }
-    st_print_results (fp, false);
+    ct_print_results (fp, false);
     fclose(fp);
 
     return EXIT_SUCCESS;
