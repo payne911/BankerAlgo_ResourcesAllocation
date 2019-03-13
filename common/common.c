@@ -16,7 +16,7 @@ ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout) {
         if (ret > 0) {
             if (fds->revents & POLLIN) {
                 ret = recv(sockfd, (char*)buf + len, obj_sz - len, 0);
-                //printf("read_socket() : %d %d %p %zu\n", ret, len, buf, sizeof(buf));
+                //printf("read_socket() : read_by_recv:%d index_read:%d pointer:%p size:%zu\n", ret, len, buf, sizeof(buf));
                 if (ret < 0) {
                     // abort connection
                     perror("recv()");
@@ -33,4 +33,59 @@ ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout) {
         }
     } while (ret != 0 && len < obj_sz);
     return ret;
+}
+
+
+bool send_header(int fd, cmd_header_t *data, size_t len) {
+    /// Send the data through the socket.
+    /// see: https://stackoverflow.com/a/49395422/9768291
+
+    printf("_____send_header(): cmd_type(%d)=%s  nb_args=%d | fd:%d\n",
+           data->cmd, TO_ENUM(data->cmd), data->nb_args, fd);
+
+    while (len > 0) {
+        ssize_t l = send(fd, data, len, MSG_NOSIGNAL);
+
+        if (l > 0) {
+            data += l;
+            len  -= l;
+        } else if (l == 0) {
+            fprintf(stderr, "send_header(): empty?\n");
+            break;
+        } else if (errno == EINTR) { // a signal occured before any data was transmitted
+            continue;
+        } else {
+            perror("send()");
+            break;
+        }
+    }
+
+    return (len == 0);
+}
+
+
+bool send_args(int fd, int *args, size_t len) {
+    /// Send the data through the socket.
+    /// see: https://stackoverflow.com/a/49395422/9768291
+
+    printf("_____send_args(): length= %zu | fd:%d | arg0=%d\n", len, fd, args[0]);
+
+    while (len > 0) {
+        ssize_t l = send(fd, args, len, MSG_NOSIGNAL);
+
+        if (l > 0) {
+            args += l;
+            len  -= l;
+        } else if (l == 0) {
+            fprintf(stderr, "send_args(): empty?\n");
+            break;
+        } else if (errno == EINTR) { // a signal occured before any data was transmitted
+            continue;
+        } else {
+            perror("send()");
+            break;
+        }
+    }
+
+    return (len == 0);
 }

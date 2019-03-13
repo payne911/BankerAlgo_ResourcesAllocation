@@ -2,8 +2,6 @@
 #define _XOPEN_SOURCE 500
 
 #include "client_thread.h"
-#include <netinet/in.h> // for `struct sockaddr_in`
-#include <errno.h>
 
 int port_number = -1;
 int num_request_per_client = -1;
@@ -30,6 +28,11 @@ unsigned int count_dispatched = 0;
 // Nombre total de requêtes envoyées.
 unsigned int request_sent = 0;
 
+/* todo: ensure useful */
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+bool initialized_server = false;
+int *client_res_max   = NULL;
+int *client_res_alloc = NULL;
 
 
 // Vous devez modifier cette fonction pour faire l'envoie des requêtes.
@@ -47,11 +50,16 @@ send_request (int client_id, int request_id, int socket_fd)
     fprintf (stdout, "Client %d is sending its %d request through fd %d\n",
             client_id, request_id, socket_fd);
 
-    cmd_header_t header;
-    frame init;
-    int test[] = {1,3,2,5,6,2425};
-    setup_frame(&init, &header, REQ, 6, test); // todo: implement the proper request
-    send_data(&socket_fd, &init, sizeof(init));
+
+
+    cmd_header_t head_s;
+    head_s.cmd = REQ;  // todo: implement the proper request
+    head_s.nb_args = 6;
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+
+    int args_s[] = {8,3,2,5,6,2425}; // RNG
+    printf("id %d sending REQ, arg0= %d\n", client_id, args_s[0]);
+    send_args(socket_fd, args_s, sizeof(args_s));
 
 
 
@@ -72,11 +80,82 @@ ct_code (void *param)
     /* Set up the socket for the client. */
     setup_socket(&socket_fd, ct);
 
-    /* Ask for connection. */
-    cmd_header_t header;
-    frame init;
-    setup_frame(&init, &header, mBEGIN);
-    send_data(&socket_fd, &init, sizeof(init));
+    /* Let one client initialize the server. */
+    pthread_mutex_lock(&mutex);
+    if(!initialized_server) {
+
+        /* Initialize the server.   (Send `BEGIN 1 RNG`) */
+        cmd_header_t head_s;
+        head_s.cmd = BEGIN;
+        head_s.nb_args = 1;
+        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+
+        int args_s[] = { rand() }; // RNG
+        printf("id %d sending BEGIN 1 %d\n", ct->id, args_s[0]);
+        send_args(socket_fd, args_s, sizeof(args_s));
+
+
+
+
+        // todo: wait for `ACK 1 RNG` (or `ERR` ?)
+        /* Await `ACK 1 RNG`. */
+        cmd_header_t head_r;
+        head_r.nb_args = -1;
+        WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 1);
+        printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r.cmd), head_r.nb_args);
+
+        int args_r[head_r.nb_args];
+        WAIT_FOR(args_r, head_r.nb_args, true); // todo: make sure 'true' is fine
+        PRINT_EXTRACTED("ACK", head_r.nb_args, args_r);
+
+        printf("id %d received RNG: %d | had sent RNG: %d\n", ct->id, args_r[0], args_s[0]);
+
+
+
+
+
+        // todo: what does CONF expect as response ?
+        /* Send `CONF` to set up the variables for the Banker-Algo. */
+        printf("prov res: %d %d\n", provisioned_resources[0], provisioned_resources[1]);
+        head_s.cmd = CONF;
+        head_s.nb_args = num_resources;
+        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+
+        printf("client %d sending CONF | num_res=%d\n", ct->id, num_resources);
+        PRINT_EXTRACTED("CONF", num_resources, provisioned_resources);
+        send_args(socket_fd, provisioned_resources, sizeof(provisioned_resources));
+
+
+        initialized_server = true;
+    }
+    pthread_mutex_unlock(&mutex);
+
+
+
+    /* Declare the client's resources to the server.   (Send `INIT res+1`) */
+    cmd_header_t head_s2;
+    head_s2.cmd = INIT;
+    head_s2.nb_args = num_resources+1;
+    send_header(socket_fd, &head_s2, sizeof(cmd_header_t));
+
+    int args_s2[] = {ct->id /*todo max_res*/, 5, 4, 2, 0, 1};
+    printf("id %d sending INIT %d\n", ct->id, head_s2.nb_args);
+    PRINT_EXTRACTED("INIT", head_s2.nb_args, args_s2);
+    send_args(socket_fd, args_s2, sizeof(args_s2));
+
+    // todo: wait for `ACK 0` (or `ERR` ?)
+    /* Await `ACK 0`. */
+    cmd_header_t head_r2;
+    head_r2.cmd = REQ; // dummy
+    head_r2.nb_args = -1;
+    WAIT_FOR(&head_r2, 2, head_r2.cmd != ACK && head_r2.nb_args != 0);
+    printf("-->id %d received cmd_r:(cmd_type=%s | nb_args=%d))\n",
+            ct->id, TO_ENUM(head_r2.cmd), head_r2.nb_args);
+
+//    int args_r2[head_r2.nb_args];
+//    WAIT_FOR(args_r2, head_r2.nb_args, true); // todo: make sure 'true' is fine
+//    PRINT_EXTRACTED("ACK", head_r2.nb_args, args_r2);
+
 
     // TP2 TODO:END
 
@@ -115,6 +194,7 @@ ct_wait_server ()
 
     // TP2 TODO
 
+    printf("entered ct_wait_server()\n");
     sleep (4);
 
     // TP2 TODO:END
@@ -193,47 +273,5 @@ void setup_socket(int *socket_fd, client_thread *ct) {
         exit(-1);
     } else {
         printf("--Client %d connected on socket_fd: %d\n", ct->id, *socket_fd);
-    }
-}
-
-
-bool send_data(int *fd, frame *data, size_t len) { //todo: rewrite
-    /// Send the data through the socket.
-    /// see: https://stackoverflow.com/a/49395422/9768291
-
-    while (len > 0) {
-        printf("send_data(): %d %d %d | fd:%d\n", data->header.cmd, data->header.nb_args, data->args[0], *fd);
-        ssize_t l = send(*fd, data, len, MSG_NOSIGNAL);
-
-        if (l > 0) {
-            data += l;
-            len  -= l;
-        } else if (l == 0) {
-            fprintf(stderr, "empty reply\n");
-            break;
-        } else if (errno == EINTR) { // a signal occured before any data was transmitted
-            continue;
-        } else {
-            perror("send()");
-            break;
-        }
-    }
-
-    return (len == 0);
-}
-
-void setup_frame(struct frame *frame, struct cmd_header_t *header,
-                 int cmd_type, int nb_args, int args[]) {
-    /// To initialize the `struct` to be sent through the socket.
-
-    // header
-    header->cmd        = cmd_type;
-    header->nb_args    = nb_args;
-    frame->header      = *header;
-
-    // cmd
-    frame->args        = malloc(nb_args * sizeof(int)); // todo: OOM
-    for(int i=0 ; i<nb_args; i++) {
-        frame->args[i] = args[i];
     }
 }

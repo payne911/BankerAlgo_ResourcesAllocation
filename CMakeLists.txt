@@ -3,6 +3,8 @@ project(BankerAlgo_RessourcesAllocation C)
 
 set(CMAKE_C_STANDARD 11)
 
+include_directories(common)
+
 add_executable(BankerAlgo_RessourcesAllocation
         common/common.c
         server/main.c server/server_thread.c

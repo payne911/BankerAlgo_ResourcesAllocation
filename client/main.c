@@ -1,5 +1,4 @@
 #include "client_thread.h"
-#include <stdlib.h>
 
 int
 main (int argc, char *argv[argc + 1])

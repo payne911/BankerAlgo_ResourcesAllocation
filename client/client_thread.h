@@ -1,7 +1,7 @@
 #ifndef CLIENTTHREAD_H
 #define CLIENTTHREAD_H
 
-#include "../common/common.h" // todo: revert to common.h ?
+#include "common.h"
 
 /* Port TCP sur lequel le serveur attend des connections.  */
 extern int port_number;
@@ -32,14 +32,8 @@ void ct_print_results (FILE *, bool);
 
 
 
-// our own methods
+/* Our own methods. */
 void setup_socket();
-void setup_frame(frame*, cmd_header_t*, int, int, int[]);
-bool send_data(int*, frame*, size_t);
-
-// macro-shortcuts for well-defined frames
-#define mBEGIN BEGIN, 2, (int[]) {1,rand()}
-#define mEND END, 0, NULL
 
 
 
