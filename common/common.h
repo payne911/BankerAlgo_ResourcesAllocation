@@ -37,11 +37,22 @@ typedef struct cmd_header_t {
     int nb_args;
 } cmd_header_t;
 
-typedef void fct_type(bool *, int *, int);
-
+typedef void fct_type(int, bool *, int *, int);
+#define FCT_ARR(NAME) \
+    void NAME (int socket_fd, bool *success, int* args, int len)
 
 /* Our own macros. */
 #define READ_TIMEOUT 4000 // 4 sec
+
+#define INIT_HEAD_R(NAME) \
+    cmd_header_t NAME; \
+    NAME.cmd = -1; /* dummy */ \
+    NAME.nb_args = -1
+
+#define INIT_HEAD_S(NAME, CMD_TYPE, NB_ARGS) \
+    cmd_header_t NAME; \
+    NAME.cmd = CMD_TYPE; \
+    NAME.nb_args = NB_ARGS
 
 #define TO_ENUM(x) \
     (x==BEGIN)?"`BEGIN`": \
@@ -56,6 +67,19 @@ typedef void fct_type(bool *, int *, int);
     (x==NB_COMMANDS)?"`NB_COMMANDS`": \
     "`UNKNOWN`"
 
+#define TO_ENUM_NUM(x, y) \
+    (x==BEGIN)?"`BEGIN` y": \
+    (x==CONF) ?"`CONF` y": \
+    (x==INIT) ?"`INIT` y": \
+    (x==REQ)  ?"`REQ` y": \
+    (x==ACK)  ?"`ACK` y": \
+    (x==WAIT) ?"`WAIT` y": \
+    (x==END)  ?"`END` y": \
+    (x==CLO)  ?"`CLO` y": \
+    (x==ERR)  ?"`ERR` y": \
+    (x==NB_COMMANDS)?"`NB_COMMANDS` y": \
+    "`UNKNOWN` y"
+
 #define PRINT_EXTRACTED(NAME, FORVAR, VAR) \
     for(int i=0; i<FORVAR; i++) { \
         printf("-_=_-extracted from %s index %d = %d\n", (NAME), i, VAR[i]); \
@@ -68,7 +92,7 @@ typedef void fct_type(bool *, int *, int);
             /* received the object (todo: possibly only partly?) */ \
             break; \
         } else { \
-            printf("=======e=bug========\n"); \
+            printf("=======e=bug========len=%d\n", ret); \
             break; \
         } \
     }

@@ -25,12 +25,20 @@ void st_print_results (FILE *, bool);
 
 /* Our own methods. */
 void process_request(int, cmd_header_t);
-void treat_header(int, cmd_header_t *, int); // todo: last int just for debug
-void prot_begin     (bool *, int *, int);
-void prot_conf      (bool *, int *, int);
-void prot_req       (bool *, int *, int);
-void prot_init      (bool *, int *, int);
-void prot_unknown   (bool *, int *, int);
+void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug
+
+// protocol functions once the clients are initialized on the server
+void prot_begin     (int, bool *, int *, int);
+void prot_conf      (int, bool *, int *, int);
+void prot_init      (int, bool *, int *, int);
+void prot_req       (int, bool *, int *, int);
+void prot_ack       (int, bool *, int *, int);
+void prot_wait      (int, bool *, int *, int);
+void prot_end       (int, bool *, int *, int);
+void prot_clo       (int, bool *, int *, int);
+void prot_err       (int, bool *, int *, int);
+void prot_nbcmd     (int, bool *, int *, int);
+void prot_unknown   (int, bool *, int *, int);
 
 
 /* Array of functions used to automatically call the good function on enums. */
@@ -39,12 +47,12 @@ static fct_type *enum_func[NB_COMMANDS + 2] = {
         &prot_conf,
         &prot_init,
         &prot_req,
-        &prot_req,
-        &prot_req,
-        &prot_req,
-        &prot_req,
-        &prot_req,
-        &prot_req,
+        &prot_ack,
+        &prot_wait,
+        &prot_end,
+        &prot_clo,
+        &prot_err,
+        &prot_nbcmd,
         &prot_unknown
 };
 

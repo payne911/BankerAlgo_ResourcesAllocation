@@ -5,7 +5,6 @@
 #include <netdb.h>
 
 #include <strings.h>
-#include <string.h>     // todo: now `common.h`... remove ?
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -87,7 +86,7 @@ st_init ()
     // Attend la connection d'un client et initialise les structures pour
     // l'algorithme du banquier.
 
-    accepting_connections = false;
+//    accepting_connections = false;
 
 
     /* Trying to establish connection (collecting socket_fd). */
@@ -98,25 +97,19 @@ st_init ()
         socket_fd = accept(server_socket_fd, (struct sockaddr *)&addr, &len);
     }
 
-    /* Declaring reused structures for communications. */
-    cmd_header_t head_r;
-    cmd_header_t head_s;
-
 
     /* Collect information from socket. Expecting `BEGIN 1 RNG`. */
-    head_r.cmd = REQ; // dummy
-    head_r.nb_args = -1;
+    INIT_HEAD_R(head_r);
     WAIT_FOR(&head_r, 2, head_r.cmd != BEGIN && head_r.nb_args != 1);
     printf("received cmd_r:(cmd_type=%s | nb_args=%d)\n", TO_ENUM(head_r.cmd), head_r.nb_args);
 
     int args_r[head_r.nb_args];
-    WAIT_FOR(&args_r, head_r.nb_args, true);
+    WAIT_FOR(args_r, head_r.nb_args, true);
     PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
 
 
     /* Send confirmation (`ACK 1 RNG`). */
-    head_s.cmd = ACK;
-    head_s.nb_args = 1;
+    INIT_HEAD_S(head_s, ACK, 1);
     send_header(socket_fd, &head_s, sizeof(cmd_header_t));
 
     int args_s[] = {args_r[0]};  // now contains RNG
@@ -125,25 +118,15 @@ st_init ()
 
 
     /* Await `CONF` to set up the variables for the Banker-Algo. */
-    cmd_header_t head_r2;
-    head_r2.cmd = REQ; // dummy
-    head_r2.nb_args = -1;
+    INIT_HEAD_R(head_r2);
     WAIT_FOR(&head_r2, 2, head_r2.cmd != CONF && head_r2.nb_args < 1);
     printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r2.cmd), head_r2.nb_args);
 
     int provs_r[head_r2.nb_args];
     WAIT_FOR(provs_r, head_r2.nb_args, true);
-    PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r); // todo: wrongs args......
+    PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r);
 
 
-    /* Send confirmation (`ACK 0`). */
-    head_s.cmd = ACK;
-    head_s.nb_args = 0;
-    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-
-//    int args_s2[0];  // todo: nothing is ok?
-//    printf("sending ACK 0\n");
-//    send_args(socket_fd, args_s2, sizeof(args_s2));
 
 
     /* Initializing the Banker-Algo's variables. */
@@ -156,11 +139,17 @@ st_init ()
         available[i] = provs_r[i];
         prov_res[i]  = provs_r[i];
     }
-    PRINT_EXTRACTED("BANKER (av)", nbr_types_res, available);
 
 
 
-    accepting_connections = true; // todo: maybe not here?
+
+    /* Send confirmation (`ACK 0`). */
+    INIT_HEAD_S(head_s2, ACK, 0);
+    send_header(socket_fd, &head_s2, sizeof(cmd_header_t));
+    printf("sent `ACK 0`\n");
+
+
+//    accepting_connections = true; // todo: maybe not here?
     close(socket_fd);
 
     printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
@@ -185,17 +174,12 @@ st_process_requests (server_thread * st, int socket_fd)
                 printf ("Thread %d received invalid command size=%d!\n", st->id, len);
                 break;
             }
-            printf("Thread %d received command=%s, nb_args=%d\n", st->id, TO_ENUM(header.cmd), header.nb_args);
+            printf("\n\nThread %d received command=%s, nb_args=%d\n", st->id, TO_ENUM(header.cmd), header.nb_args);
             // dispatch of cmd void thunk(int sockfd, struct cmd_header* header);
 
-            if(!(header.cmd == ACK && header.nb_args == 0)) {
 
-                /* Now that we have the header, process the args. */
-                treat_header(socket_fd, &header, st->id);
-            } else {
-                /* Edge-case: header is `ACK 0`*/
-                printf("<°°°°°°°°°°>Thread %d received `ACK 0`\n", st->id);
-            }
+            /* Now that we have the header, process the args. */
+            get_args(socket_fd, &header, st->id);
 
         } else {
             if (len == 0) {
@@ -274,7 +258,6 @@ st_open_socket (int port_number)
     if (server_socket_fd < 0)
         perror ("ERROR opening socket");
 
-    /* todo: verify if should replace "SO_REUSEPORT" with "SO_REUSEADDR" */
     if (setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEPORT, &(int){ 1 }, sizeof(int)) < 0) {
         perror("setsockopt()");
         exit(1);
@@ -334,8 +317,8 @@ st_print_results (FILE * fd, bool verbose)
 
 
 /* todo: remove the `tmpId` param after debugging */
-void treat_header(int socket_fd, cmd_header_t *header, int tmpId) {
-    printf("----treat_header():  sockfd: %d | cmd: %s | nb_args: %d\n",
+void get_args(int socket_fd, cmd_header_t *header, int tmpId) {
+    printf("----get_args():  sockfd: %d | cmd: %s | nb_args: %d\n",
             socket_fd, TO_ENUM(header->cmd), header->nb_args);
 
     if(header->cmd > NB_COMMANDS) {      // if undefined cmd type    todo: test that
@@ -345,94 +328,125 @@ void treat_header(int socket_fd, cmd_header_t *header, int tmpId) {
     int size_args = header->nb_args * sizeof(int);
     bool success = false;
 
-    printf("|_--cmd:%d size_args:%d\n", TO_ENUM(header->cmd), size_args);
+    printf("|____cmd:%s size_args:%d\n", TO_ENUM(header->cmd), size_args);
 
-    /* todo: extract the args now that we have the header! */
-    int* args;
-    int len = read_socket(socket_fd, args, size_args, max_wait_time * 1000);
-    printf("\n-debug1 len=%d\n\n\n\n",len);
-    if (len > 0) {
-        if (len != size_args) {
-            printf("-treat_header():  Thread %d received invalid command size=%d!\n", tmpId, len);
-        }
-        for(int i = 0; i < header->nb_args; i++) {
-            printf("-treat_header():  Thread %d received arg#%d: %d\n", tmpId, i, args[i]);
-        }
-
-        /* Using an array of functions to execute the proper function. */
-        printf("right before array of functions\n");
-        enum_func[header->cmd](&success, args, header->nb_args);
-        printf("-treat_header():  Thread %d success bool: %s\n", tmpId, success?"true":"false");
-
+    if(header->cmd == END && header->nb_args == 0) {
+        /* todo: Edge-case: header is `END 0`. */
+        printf("<°°°°°°°°°°>Thread %d received `END 0`\n", tmpId);
     } else {
-        if (len == 0) {
-            fprintf(stderr, "-treat_header():  Thread %d, connection timeout\n", tmpId);
+
+        /* Extract the args now that we have the header! */
+        int args[header->nb_args];
+        int len = read_socket(socket_fd, args, size_args, max_wait_time * 1000);
+        if (len > 0) {
+            if (len != size_args) {
+                printf("-get_args():  Thread %d received invalid command size=%d!\n", tmpId, len);
+            }
+            for(int i = 0; i < header->nb_args; i++) {
+                printf("-get_args():  Thread %d received arg#%d: %d\n", tmpId, i, args[i]);
+            }
+
+            /* Using an array of functions to execute the proper function. */
+            enum_func[header->cmd](socket_fd, &success, args, header->nb_args);
+            printf("-get_args():  Thread %d success bool: %s\n", tmpId, success?"true":"false");
+
+        } else {
+            if (len == 0) {
+                fprintf(stderr, "-get_args():  Thread %d, connection timeout\n", tmpId);
+            }
         }
     }
-
-
-
-//    switch (header->cmd) { // todo: replace with array of functions?!
-//        case BEGIN:
-//            prot_begin(args, header->nb_args);
-//            break;
-//        case CONF:
-//            prot_conf (args, header->nb_args);
-//            break;
-//        case REQ:
-//            prot_req (args, header->nb_args);
-//            break;
-//        case ACK:
-//            // todo: should not happen
-//            break;
-//        default:
-//            break;
-//    }
-
 }
 
 
 
 
-/* Functions to treat each type of command individually. */
 
-//enum cmd_type {
-//    BEGIN,
-//    CONF,
-//    INIT,
-//    REQ,
-//    ACK,// Mars Attack
-//    WAIT,
-//    END,
-//    CLO,
-//    ERR,
-//    NB_COMMANDS
-//};
+/* Functions to treat each type of command's response individually. */
+/* void NAME (int socket_fd, bool *success, int* args, int len)     */
 
-void prot_begin     (bool *success, int* args, int len) {
+FCT_ARR(prot_begin) {
     printf("new BEGIN\n");
-    *success = true;
+    *success = false; // shouldn't happen at that point
 }
 
-void prot_conf      (bool *success, int* args, int len) {
+FCT_ARR(prot_conf) {
     printf("new CONF\n");
-    *success = true;
+    *success = false; // shouldn't happen at that point
 }
 
-void prot_req       (bool *success, int* args, int len) {
-    printf("new REQ\n");
-    *success = true;
-}
-
-void prot_init      (bool *success, int* args, int len) {
+FCT_ARR(prot_init) {
     printf("new INIT\n");
+
+    /* New user is connecting. */
+    pthread_mutex_lock(&mutex);
+    nb_registered_clients++;
+    printf("number of clients: %d\n", nb_registered_clients);
+    pthread_mutex_unlock(&mutex);
+
+    /* Send confirmation (`ACK 0`). */
+    INIT_HEAD_S(head_s, ACK, 0);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+    printf("sent `ACK 0`\n");
+
     *success = true;
 }
 
-void prot_unknown   (bool *success, int* args, int len) {
-    printf("new UNKNOWN\n");
+FCT_ARR(prot_req) {
+    printf("new REQ\n");
+
+    // todo : BANKER + ACK/ERR
+
+    /* Send confirmation (`ACK 0`). */
+    INIT_HEAD_S(head_s, ACK, 0);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+    printf("sent `ACK 0`\n");
+
     *success = true;
 }
+
+FCT_ARR(prot_ack) {
+    printf("new ACK\n");
+    *success = false; // shouldn't happen
+}
+
+FCT_ARR(prot_wait) {
+    printf("new WAIT\n");
+    *success = false; // shouldn't happen
+}
+
+FCT_ARR(prot_end) {
+    printf("new END\n");
+    *success = false;  // shouldn't happen at that point
+}
+
+FCT_ARR(prot_clo) {
+    printf("new CLO\n");
+    *success = true;
+}
+
+FCT_ARR(prot_err) {
+    printf("new ERR\n");
+    *success = false; // shouldn't happen
+}
+
+FCT_ARR(prot_nbcmd) {
+    printf("new NB_COMMANDS\n");
+    *success = false; // shouldn't happen
+}
+
+FCT_ARR(prot_unknown) {
+    printf("new UNKNOWN\n");
+    *success = false; // shouldn't happen
+}
+
+
+
+// todo (oli)
+            /*=====================================*/
+            /*||  Banker Algorithm implemention  ||*/
+            /*=====================================*/
+
 
 //void computeNeeded(int need[P][R], int maxm[P][R], int allot[P][R]) {
 //    for (int i = 0 ; i < P ; i++)
