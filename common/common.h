@@ -82,7 +82,7 @@ typedef void fct_type(int, bool *, int *, int);
 
 #define PRINT_EXTRACTED(NAME, FORVAR, VAR) \
     for(int i=0; i<FORVAR; i++) { \
-        printf("-_=_-extracted from %s index %d = %d\n", (NAME), i, VAR[i]); \
+        printf("-_=_-extracted from `%s` index %d = %d\n", (NAME), i, VAR[i]); \
     } \
 
 #define WAIT_FOR(OUTPUT, LEN, COND) \

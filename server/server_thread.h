@@ -24,7 +24,7 @@ void st_print_results (FILE *, bool);
 
 
 /* Our own methods. */
-void process_request(int, cmd_header_t);
+void setup_socket(int *);
 void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug
 
 // protocol functions once the clients are initialized on the server

@@ -2,6 +2,7 @@
 #define CLIENTTHREAD_H
 
 #include "common.h"
+#include <semaphore.h>
 
 /* Port TCP sur lequel le serveur attend des connections.  */
 extern int port_number;
@@ -34,7 +35,8 @@ void send_request (int, int, int); // added here to relocate
 
 
 /* Our own methods. */
-void setup_socket();
+void setup_socket(int *, client_thread *);
+void terminate_client(client_thread *);
 
 
 
