@@ -291,8 +291,6 @@ st_print_results (FILE * fd, bool verbose)
  *#################################################
  */
 
-// todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
-// todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
 
 
 void setup_socket(int *socket_fd) {
@@ -484,6 +482,8 @@ FCT_ARR(prot_unknown) {
             /*||  Banker Algorithm implemention  ||*/
             /*=====================================*/
 
+// todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
+// todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
 
 //void computeNeeded(int need[P][R], int maxm[P][R], int allot[P][R]) {
 //    for (int i = 0 ; i < P ; i++)

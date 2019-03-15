@@ -35,7 +35,7 @@ void send_request (int, int, int); // added here to relocate
 
 
 
-/* Our own methods. */
+/* Our own methods.  todo: move to `client_thread.c` ? */
 void ct_free(client_thread *);
 void ct_init_server(int);
 void setup_socket(int *, client_thread *);

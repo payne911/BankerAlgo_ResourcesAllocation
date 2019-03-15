@@ -21,7 +21,7 @@ void st_print_results (FILE *, bool);
 
 
 
-/* Our own methods. */
+/* Our own methods. todo: move to `server_thread.c` ? */
 void st_free(server_thread *);
 void setup_socket(int *);
 void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug

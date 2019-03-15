@@ -98,7 +98,7 @@ ct_code (void *param)
         send_request (ct->id, request_id, socket_fd);
         close(socket_fd);
 
-        /* After last request, trigger the `CLO`. */
+        /* After last request, trigger the `CLO`. */ // todo: legal to move below `for` ?
         if(request_id == num_request_per_client - 1) {
             printf("\n\nLast request of client %d is being sent\n", ct->id);
             terminate_client(ct);
