@@ -69,8 +69,14 @@ typedef struct client { // todo: try to integrate this other approach instead?
     // bool visited; // todo: not required?
 } client;
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+pthread_mutex_t mut_c_accepted   = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_wait       = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_invalid    = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_dispatched = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_processed  = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_ended      = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_registered = PTHREAD_MUTEX_INITIALIZER;
 
 
 
@@ -164,7 +170,8 @@ st_process_requests (server_thread * st, int socket_fd)
         if (len != sizeof(header.cmd) && len != sizeof(header)) {
             printf ("Thread %d received invalid command size=%d!\n", st->id, len);
         } else {
-            printf("\n\nThread %d received command=%s, nb_args=%d\n", st->id, TO_ENUM(header.cmd), header.nb_args);
+            printf("\n\nThread %d received command=%s, nb_args=%d\n",
+                    st->id, TO_ENUM(header.cmd), header.nb_args);
             // dispatch of cmd void thunk(int sockfd, struct cmd_header* header);
 
 
@@ -178,33 +185,6 @@ st_process_requests (server_thread * st, int socket_fd)
     }
 }
 
-
-void
-st_signal ()
-{
-    // TODO: Remplacer le contenu de cette fonction
-
-    /* Signale aux clients de se terminer. (Selon `server\main.c`) */
-    printf("\n\n\n\nentered st_signal()\n");
-
-
-    /* Trying to establish connection (collecting socket_fd). */
-    int socket_fd = -1;
-    setup_socket(&socket_fd);
-
-    /* Send confirmation (`ACK 0`). */
-    INIT_HEAD_S(head_s, ACK, 0);
-    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-    printf("sent `ACK 0`\n");
-
-
-//    free(available); // todo: maybe useful
-
-    close(socket_fd);
-
-
-    // TODO end
-}
 
 void *
 st_code (void *param)
@@ -318,6 +298,8 @@ st_print_results (FILE * fd, bool verbose)
 void setup_socket(int *socket_fd) {
     /// Sets up the file descriptor of the socket, once connected.
 
+    *socket_fd = -1; // safety measure
+
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
     while (*socket_fd < 0) {
@@ -376,6 +358,21 @@ void get_args(int socket_fd, cmd_header_t *header, int tmpId) {
 }
 
 
+void st_free(server_thread * st) {
+    /// Used to free up all the memory allocated.
+
+
+    //    for(int i=0; i<nbr_types_res; i++) {
+    //        if(available[i] != NULL)
+    //            free(available[i]);
+    //    }
+
+    free(available);
+    free(prov_res);
+    free(st);
+}
+
+
 
 
 
@@ -396,10 +393,10 @@ FCT_ARR(prot_init) {
     printf("received new INIT\n");
 
     /* New user is connecting. */
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mut_c_registered);
     nb_registered_clients++;
     printf("number of clients: %d\n", nb_registered_clients);
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mut_c_registered);
 
     // todo: set up banker's vars ?
 
@@ -437,14 +434,16 @@ FCT_ARR(prot_wait) {
 FCT_ARR(prot_end) {
     printf("received new END\n");
 
-    // supposing (but not ensured) that this was the last request of the clients
+    // todo: supposing (but not ensured) that this was the last request of the clients
     // `args` is null!!
 
     // todo
     /* Send confirmation (`ACK 0`). */
     INIT_HEAD_S(head_s, ACK, 0);
     send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-    printf("sent `ACK 0`\n");
+    printf("sent the last `ACK 0`\n");
+
+    accepting_connections = false;
 
     *success = true;
 }
@@ -458,8 +457,7 @@ FCT_ARR(prot_clo) {
     printf("sent `ACK 0`\n");
 
     // todo: adjust banker's vars ?
-
-    close(socket_fd);
+    // todo: add `close(socket_fd)` ?
 
     *success = true;
 }

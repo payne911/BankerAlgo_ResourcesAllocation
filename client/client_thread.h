@@ -23,6 +23,7 @@ struct client_thread
   unsigned int id;
   pthread_t pt_tid;
   pthread_attr_t pt_attr;
+  // todo: banker's vars
 };
 
 
@@ -35,6 +36,8 @@ void send_request (int, int, int); // added here to relocate
 
 
 /* Our own methods. */
+void ct_free(client_thread *);
+void ct_init_server(int);
 void setup_socket(int *, client_thread *);
 void terminate_client(client_thread *);
 

@@ -37,9 +37,7 @@ typedef struct cmd_header_t {
     int nb_args;
 } cmd_header_t;
 
-typedef void fct_type(int, bool *, int *, int);
-#define FCT_ARR(NAME) \
-    void NAME (int socket_fd, bool *success, int* args, int len)
+
 
 /* Our own macros. */
 #define READ_TIMEOUT 4000 // 4 sec

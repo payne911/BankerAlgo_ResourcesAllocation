@@ -12,29 +12,38 @@ int *provisioned_resources = NULL;
 unsigned int count = 0;
 
 
-// Variable du journal.
+/* Variable du journal. */
+
 // Nombre de requête acceptée (ACK reçus en réponse à REQ)
 unsigned int count_accepted = 0;
 
 // Nbr de requête en attente (WAIT reçus en réponse à REQ)
 unsigned int count_on_wait = 0;
 
-// Nbr de requête refusée (REFUSE reçus en réponse à REQ) // todo: REFUSE??
+// Nbr de requête refusée (ERR reçus en réponse à REQ)
 unsigned int count_invalid = 0;
 
 // Nbr de client qui se sont terminés correctement (ACK reçus en réponse à END)
 unsigned int count_dispatched = 0; // todo: should always end up being 1?
 
-// Nbr total de requêtes envoyées. // todo: REQ? or ALL?
+// Nbr total de requêtes envoyées (REQ)
 unsigned int request_sent = 0;
 
 
 /* todo: ensure useful */
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-bool initialized_server = false;
 int *client_res_max   = NULL;
 int *client_res_alloc = NULL;
-sem_t semaphore;
+sem_t sem_pthread_join;
+
+
+pthread_mutex_t mut_c_count      = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_accepted   = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_wait       = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_invalid    = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_dispatched = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_c_req        = PTHREAD_MUTEX_INITIALIZER;
+
+
 
 void *
 ct_code (void *param)
@@ -46,71 +55,8 @@ ct_code (void *param)
     // TP2 TODO
     // Vous devez ici faire l'initialisation des petits clients (`INIT`).
 
-    /* Let ONE client initialize the server. */
-    pthread_mutex_lock(&mutex);
-    if(!initialized_server) {
 
-//        /* Used for the ct_wait */
-//        sem_init(&semaphore, 0, 0);
-
-        /* Set up the socket for the client. */
-        setup_socket(&socket_fd, NULL);
-
-        /* Initialize the server.   (Send `BEGIN 1 RNG`) */
-        INIT_HEAD_S(head_s, BEGIN, 1);
-        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-
-        int args_s[] = { rand() }; // RNG
-        printf("id %d sending BEGIN 1 %d\n", ct->id, args_s[0]);
-        send_args(socket_fd, args_s, sizeof(args_s));
-
-
-
-
-        // todo: wait for `ACK 1 RNG` (or `ERR` ?)
-        /* Await `ACK 1 RNG`. */
-        INIT_HEAD_R(head_r);
-        WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 1);
-        printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r.cmd), head_r.nb_args);
-
-        int args_r[head_r.nb_args];
-        WAIT_FOR(args_r, head_r.nb_args, true); // todo: make sure 'true' is fine
-        PRINT_EXTRACTED("ACK", head_r.nb_args, args_r);
-
-        printf("id %d received RNG: %d | had sent RNG: %d\n", ct->id, args_r[0], args_s[0]);
-
-
-
-        // todo: what does CONF expect as response ?
-        /* Send `CONF` to set up the variables for the Banker-Algo. */
-        printf("prov res: %d %d\n", provisioned_resources[0], provisioned_resources[1]);
-        INIT_HEAD_S(head_s2, CONF, num_resources);
-        send_header(socket_fd, &head_s2, sizeof(cmd_header_t));
-
-        printf("client %d sending CONF | num_res=%d\n", ct->id, num_resources);
-        PRINT_EXTRACTED("CONF", num_resources, provisioned_resources);
-        send_args(socket_fd, provisioned_resources, num_resources*sizeof(int));
-
-
-
-        // todo: wait for `ACK 0` (or `ERR` ?)
-        /* Await `ACK 0`. */
-        INIT_HEAD_R(head_r2);
-        WAIT_FOR(&head_r2, 2, head_r2.cmd != ACK && head_r2.nb_args != 0);
-        printf("-->id %d received:(cmd_type=%s | nb_args=%d))\n",
-               ct->id, TO_ENUM(head_r2.cmd), head_r2.nb_args);
-
-
-        /* This single-purpose client is over. */
-        printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
-        initialized_server = true;
-        close(socket_fd);
-        socket_fd = -1; // to ensure this current "Client" gets its new socket.
-    }
-    pthread_mutex_unlock(&mutex);
-
-
-    /* Now any client may connect to the server. */
+    /* Connect to the server. */
     setup_socket(&socket_fd, ct);
 
 
@@ -136,7 +82,6 @@ ct_code (void *param)
     printf("--->id %d received:(cmd_type=%s | nb_args=%d))\n",
             ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
 
-    /*todo:fewfjseroigjr*/
     close(socket_fd);
 
     // TP2 TODO:END
@@ -151,11 +96,11 @@ ct_code (void *param)
         socket_fd = -1;
         setup_socket(&socket_fd, ct);
         send_request (ct->id, request_id, socket_fd);
-        // todo: add here an if to check if last method and free memory?
         close(socket_fd);
 
-        if(request_id == num_request_per_client -1) {
-            printf("\n\n\n\n\n\nLast request of client %d has been sent\n", ct->id);
+        /* After last request, trigger the `CLO`. */
+        if(request_id == num_request_per_client - 1) {
+            printf("\n\n\n\n\n\nLast request of client %d is being sent\n", ct->id);
             terminate_client(ct);
         }
 
@@ -204,9 +149,9 @@ send_request (int client_id, int request_id, int socket_fd)
     send_args(socket_fd, args_s, sizeof(args_s));
 
     /* Increment stats. */
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mut_c_req);
     request_sent++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mut_c_req);
 
 
     /* Await `ACK 0`. */        // todo could also be ERR or WAIT
@@ -216,9 +161,9 @@ send_request (int client_id, int request_id, int socket_fd)
            client_id, TO_ENUM(head_r.cmd), head_r.nb_args);
 
     /* Increment stats. */      // todo: diff replies : increase diff stats
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mut_c_accepted);
     count_accepted++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mut_c_accepted);
 
 
     // TP2 TODO:END
@@ -238,9 +183,11 @@ ct_wait_server ()
 
     // TP2 TODO
 
-    // todo: integrate semaphore
-//    sem_wait(&semaphore);
-    while(count > 0);
+    printf("Now waiting for all clients to `CLO`\n");
+    sem_wait(&sem_pthread_join);
+//    while(count > 0);
+    printf("\n\n\n\n=========================================================\n"
+           "Executing the `END` sequence.\n");
 
     /* Set up the socket. */
     int socket_fd = -1;
@@ -248,29 +195,19 @@ ct_wait_server ()
 
 
     /* Terminate the server. */
-    INIT_HEAD_S(head_s2, END, 0);
-    send_header(socket_fd, &head_s2, sizeof(cmd_header_t));
-
-    /* Increment stats. */
-    pthread_mutex_lock(&mutex);
-    request_sent++; // todo: not that?
-    pthread_mutex_unlock(&mutex);
+    INIT_HEAD_S(head_s, END, 0);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
 
 
     /* Await `ACK 0`. */        // todo could also be ERR or WAIT ?
-    INIT_HEAD_R(head_r2);
-    WAIT_FOR(&head_r2, 2, head_r2.cmd != ACK && head_r2.nb_args != 0);
+    INIT_HEAD_R(head_r);
+    WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
     printf("-->main received head_r:(cmd_type=%s | nb_args=%d))\n",
-           TO_ENUM(head_r2.cmd), head_r2.nb_args);
+           TO_ENUM(head_r.cmd), head_r.nb_args);
 
 
-
-    /* todo: increment count when successful? */
     /* Increment stats. */
-    pthread_mutex_lock(&mutex);
-    count_dispatched++;
-    pthread_mutex_unlock(&mutex);
-
+    request_sent++; // todo: not that?
 
     sleep (4); // todo: eventually remove?
 
@@ -285,6 +222,7 @@ void
 ct_init (client_thread * ct)
 {
     ct->id = count++;
+    sem_wait(&sem_pthread_join);
 }
 
 void
@@ -333,10 +271,73 @@ ct_print_results (FILE * fd, bool verbose)
  */
 
 
+void ct_init_server(int num_clients) {
+    /// Initializes the server properly before clients get "instanciated".
+
+    /* Used for the ct_wait */
+    sem_init(&sem_pthread_join, 0, num_clients);
+
+    /* Set up the socket for the client. */
+    int socket_fd = -1;
+    setup_socket(&socket_fd, NULL);
+
+    /* Initialize the server.   (Send `BEGIN 1 RNG`) */
+    INIT_HEAD_S(head_s, BEGIN, 1);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+
+    int args_s[] = { rand() }; // RNG
+    printf("MAIN THREAD sending BEGIN 1 %d\n", args_s[0]);
+    send_args(socket_fd, args_s, sizeof(args_s));
+
+
+
+
+    // todo: wait for `ACK 1 RNG` (or `ERR` ?)
+    /* Await `ACK 1 RNG`. */
+    INIT_HEAD_R(head_r);
+    WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 1);
+    printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r.cmd), head_r.nb_args);
+
+    int args_r[head_r.nb_args];
+    WAIT_FOR(args_r, head_r.nb_args, true); // todo: make sure 'true' is fine
+    PRINT_EXTRACTED("ACK", head_r.nb_args, args_r);
+
+    printf("MAIN THREAD received RNG: %d | had sent RNG: %d\n", args_r[0], args_s[0]);
+
+
+
+    // todo: what does CONF expect as response ?
+    /* Send `CONF` to set up the variables for the Banker-Algo. */
+    printf("prov res: %d %d\n", provisioned_resources[0], provisioned_resources[1]);
+    INIT_HEAD_S(head_s2, CONF, num_resources);
+    send_header(socket_fd, &head_s2, sizeof(cmd_header_t));
+
+    printf("MAIN THREAD sending CONF | num_res=%d\n", num_resources);
+    PRINT_EXTRACTED("CONF", num_resources, provisioned_resources);
+    send_args(socket_fd, provisioned_resources, num_resources*sizeof(int));
+
+
+
+    // todo: wait for `ACK 0` (or `ERR` ?)
+    /* Await `ACK 0`. */
+    INIT_HEAD_R(head_r2);
+    WAIT_FOR(&head_r2, 2, head_r2.cmd != ACK && head_r2.nb_args != 0);
+    printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d))\n",
+           TO_ENUM(head_r2.cmd), head_r2.nb_args);
+
+
+    /* This single-purpose client is over. */
+    printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
+    close(socket_fd);
+}
+
 
 void setup_socket(int *socket_fd, client_thread *ct) {
     /// Connects client to socket, and stores the proper variable for reuse.
+    /// 'NULL' as the second argument means that it's the main thread.
     /// see: http://www.cs.rpi.edu/~moorthy/Courses/os98/Pgms/socket.html
+
+    *socket_fd = -1; // possibly redundant: just making sure
 
     struct sockaddr_in addr;
     *socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -360,6 +361,7 @@ void setup_socket(int *socket_fd, client_thread *ct) {
 
 
 void terminate_client(client_thread * client) {
+    /// Announces the end of the client to the server.
 
     int socket_fd = -1;
     setup_socket(&socket_fd, client);
@@ -375,9 +377,9 @@ void terminate_client(client_thread * client) {
     send_args(socket_fd, args_s, sizeof(args_s));
 
     /* Increment stats. */
-    pthread_mutex_lock(&mutex);
-    request_sent++; // todo: not that!
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_lock(&mut_c_dispatched);
+    count_dispatched++; // todo: not that!?
+    pthread_mutex_unlock(&mut_c_dispatched);
 
 
     /* Await `ACK 0`. */        // todo could also be ERR or WAIT
@@ -389,9 +391,17 @@ void terminate_client(client_thread * client) {
     printf("Client id %d using fd %d should be terminated on server-side.\n",
             tid, socket_fd);
 
-    pthread_mutex_lock(&mutex);
-    count--;
-    pthread_mutex_unlock(&mutex);
+//    pthread_mutex_lock(&mutex);
+//    count--;
+//    pthread_mutex_unlock(&mutex);
+    sem_post(&sem_pthread_join);
 
     close(socket_fd);
+}
+
+
+void ct_free(client_thread *ct) {
+    /// Used to free up all the allocated memory.
+
+    free(ct);
 }

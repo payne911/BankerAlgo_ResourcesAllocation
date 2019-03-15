@@ -15,15 +15,14 @@ struct server_thread
 
 void st_open_socket (int port_number);
 void st_init (void);
-void st_process_request (server_thread *, int);
-void st_signal (void);
+void st_process_requests (server_thread *, int);
 void *st_code (void *);
-//void st_create_and_start(st);
 void st_print_results (FILE *, bool);
 
 
 
 /* Our own methods. */
+void st_free(server_thread *);
 void setup_socket(int *);
 void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug
 
@@ -42,7 +41,8 @@ void prot_unknown   (int, bool *, int *, int);
 
 
 /* Array of functions used to automatically call the good function on enums. */
-static fct_type *enum_func[NB_COMMANDS + 2] = {
+typedef void my_fct_type(int, bool *, int *, int);
+static my_fct_type *enum_func[NB_COMMANDS + 2] = {
         &prot_begin,
         &prot_conf,
         &prot_init,
@@ -55,5 +55,7 @@ static fct_type *enum_func[NB_COMMANDS + 2] = {
         &prot_nbcmd,
         &prot_unknown
 };
+#define FCT_ARR(NAME) \
+    void NAME (int socket_fd, bool *success, int* args, int len)
 
 #endif
