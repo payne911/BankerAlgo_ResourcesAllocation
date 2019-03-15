@@ -23,8 +23,8 @@ unsigned int count_on_wait = 0;
 // Nbr de requête refusée (ERR reçus en réponse à REQ)
 unsigned int count_invalid = 0;
 
-// Nbr de client qui se sont terminés correctement (ACK reçus en réponse à END)
-unsigned int count_dispatched = 0; // todo: should always end up being 1?
+// Nbr de client qui se sont terminés correctement (ACK reçus en réponse à CLO)
+unsigned int count_dispatched = 0;
 
 // Nbr total de requêtes envoyées (REQ)
 unsigned int request_sent = 0;
@@ -100,7 +100,7 @@ ct_code (void *param)
 
         /* After last request, trigger the `CLO`. */
         if(request_id == num_request_per_client - 1) {
-            printf("\n\n\n\n\n\nLast request of client %d is being sent\n", ct->id);
+            printf("\n\nLast request of client %d is being sent\n", ct->id);
             terminate_client(ct);
         }
 
@@ -205,9 +205,6 @@ ct_wait_server ()
     printf("-->main received head_r:(cmd_type=%s | nb_args=%d))\n",
            TO_ENUM(head_r.cmd), head_r.nb_args);
 
-
-    /* Increment stats. */
-    request_sent++; // todo: not that?
 
     sleep (4); // todo: eventually remove?
 
