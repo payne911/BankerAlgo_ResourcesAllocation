@@ -37,8 +37,8 @@ void ct_print_results (FILE *, bool);
 
 
 /* Our own methods.  todo: move to `client_thread.c` ? */
-void send_request (client_thread *, int, int); // modified and relocated
-bool ct_init_server(int);
+void send_request (client_thread *, int); // modified and relocated
+bool ct_init_server();
 bool dispatch_resources(int);
 void setup_socket(int *, client_thread *);
 void terminate_client(client_thread *);

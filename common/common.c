@@ -36,6 +36,16 @@ ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout) {
 }
 
 
+
+
+
+            /*
+             *#################################################
+             *#              ADDITIONAL METHODS               #
+             *#################################################
+             */
+
+
 bool send_header(int fd, cmd_header_t *data, size_t len) {
     /// Send the data through the socket.
     /// see: https://stackoverflow.com/a/49395422/9768291

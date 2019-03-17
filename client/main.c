@@ -20,7 +20,7 @@ main (int argc, char *argv[argc + 1])
         provisioned_resources[i] = atoi (argv[i + 4]);
 
     /* Added to initialize the server "gracefully". */
-    bool success_on_init = ct_init_server(num_clients);
+    bool success_on_init = ct_init_server();
 
     if(success_on_init) {
         client_thread *client_threads

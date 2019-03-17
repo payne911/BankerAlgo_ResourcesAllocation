@@ -31,7 +31,7 @@ unsigned int request_sent = 0;
 
 
 /* Added for proper multi-threading. */
-//sem_t sem_pthread_join;
+sem_t sem_pthread_join;
 pthread_mutex_t mut_c_count      = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mut_c_accepted   = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mut_c_wait       = PTHREAD_MUTEX_INITIALIZER;
@@ -138,9 +138,7 @@ ct_code (void *param)
         // Vous devez ici coder, conjointement avec le corps de send request,
         // le protocole d'envoi de requête.
 
-        socket_fd = -1;
-        send_request (ct, request_id, socket_fd);
-//        close(socket_fd);
+        send_request (ct, request_id);
 
         /* After last request, trigger the `CLO`. */ // todo: legal to move below `for` ?
         if(request_id == num_request_per_client - 1) {
@@ -165,11 +163,12 @@ ct_code (void *param)
 // Assurez-vous que la dernière requête d'un client libère toute les ressources
 // qu'il a jusqu'alors accumulées.
 void
-send_request (client_thread * ct, int request_id, int socket_fd)
-{
+send_request (client_thread * ct, int request_id)
+    {
 
     // TP2 TODO
 
+    int socket_fd = -1;
     bool loop = true;
     do {
         setup_socket(&socket_fd, ct);
@@ -275,9 +274,12 @@ ct_wait_server ()
 
     // TP2 TODO
 
+    /* Waiting for ALL clients to disconnect with `CLO`. */
     printf("Now waiting for all clients to `CLO`\n");
-//    sem_wait(&sem_pthread_join);
-    while(count > 0);
+    while(true) {
+        sem_wait(&sem_pthread_join);
+        if(count <= 0) break;
+    }
     printf("\n\n\n\n=========================================================\n"
            "Executing the `END` sequence.\n");
 
@@ -386,18 +388,18 @@ ct_print_results (FILE * fd, bool verbose)
 
 
 
-/*
- *#################################################
- *#              ADDITIONAL METHODS               #
- *#################################################
- */
+        /*
+         *#################################################
+         *#              ADDITIONAL METHODS               #
+         *#################################################
+         */
 
 
-bool ct_init_server(int num_clients) {
+bool ct_init_server() {
     /// Initializes the server properly before clients get "instanciated".
 
     /* Used for the ct_wait */
-//    sem_init(&sem_pthread_join, 0, -num_clients+1);
+    sem_init(&sem_pthread_join, 0, 0);
 
     /* Set up the socket for the client. */
     int socket_fd = -1;
@@ -530,7 +532,7 @@ void terminate_client(client_thread * client) {
     pthread_mutex_lock(&mut_c_count);
     count--;
     pthread_mutex_unlock(&mut_c_count);
-//    sem_post(&sem_pthread_join);
+    sem_post(&sem_pthread_join);
 
     close(socket_fd);
 }
