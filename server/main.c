@@ -33,8 +33,8 @@ main (int argc, char *argv[argc + 1])
     for (unsigned int i = 0; i < num_server_threads; i++)
         pthread_join (st[i].pt_tid, NULL);
 
-    /* Free all the memory allocated. todo: legal?*/
-    st_free(st);
+    /* Free all the memory allocated.*/
+    free(st);
 
     // Affiche le journal.
     st_print_results (stdout, true);

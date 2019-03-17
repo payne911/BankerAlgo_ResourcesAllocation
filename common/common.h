@@ -48,41 +48,38 @@ typedef struct cmd_header_t {
     NAME.nb_args = -1
 
 #define INIT_HEAD_S(NAME, CMD_TYPE, NB_ARGS) \
-    cmd_header_t NAME; \
-    NAME.cmd = CMD_TYPE; \
-    NAME.nb_args = NB_ARGS
+    cmd_header_t NAME = {.cmd=CMD_TYPE, .nb_args=NB_ARGS};
+
+#define SEND_ACK(NAME) \
+    cmd_header_t NAME = {.cmd=ACK, .nb_args=0}; \
+    send_header(socket_fd, &NAME, sizeof(cmd_header_t)); \
+    printf("sent `ACK 0`\n")
+
+#define TEST_WAIT(NAME, TIME) \
+    cmd_header_t NAME = {.cmd=WAIT, .nb_args=1}; \
+    send_header(socket_fd, &NAME, sizeof(cmd_header_t)); \
+    int args_s[] = { TIME }; \
+    send_args(socket_fd, args_s, sizeof(args_s)); \
+    printf("sent `WAIT 1`\n")
 
 #define TO_ENUM(x) \
     (x==BEGIN)?"`BEGIN`": \
-    (x==CONF) ?"`CONF`": \
-    (x==INIT) ?"`INIT`": \
-    (x==REQ)  ?"`REQ`": \
-    (x==ACK)  ?"`ACK`": \
-    (x==WAIT) ?"`WAIT`": \
-    (x==END)  ?"`END`": \
-    (x==CLO)  ?"`CLO`": \
-    (x==ERR)  ?"`ERR`": \
-    (x==NB_COMMANDS)?"`NB_COMMANDS`": \
+    (x==CONF) ?"`CONF`" : \
+    (x==INIT) ?"`INIT`" : \
+    (x==REQ)  ?"`REQ`"  : \
+    (x==ACK)  ?"`ACK`"  : \
+    (x==WAIT) ?"`WAIT`" : \
+    (x==END)  ?"`END`"  : \
+    (x==CLO)  ?"`CLO`"  : \
+    (x==ERR)  ?"`ERR`"  : \
     "`UNKNOWN`"
-
-#define TO_ENUM_NUM(x, y) \
-    (x==BEGIN)?"`BEGIN` y": \
-    (x==CONF) ?"`CONF` y": \
-    (x==INIT) ?"`INIT` y": \
-    (x==REQ)  ?"`REQ` y": \
-    (x==ACK)  ?"`ACK` y": \
-    (x==WAIT) ?"`WAIT` y": \
-    (x==END)  ?"`END` y": \
-    (x==CLO)  ?"`CLO` y": \
-    (x==ERR)  ?"`ERR` y": \
-    (x==NB_COMMANDS)?"`NB_COMMANDS` y": \
-    "`UNKNOWN` y"
 
 #define PRINT_EXTRACTED(NAME, FORVAR, VAR) \
     for(int i=0; i<FORVAR; i++) { \
         printf("-_=_-extracted from `%s` index %d = %d\n", (NAME), i, VAR[i]); \
-    } \
+    }
 
+/* todo: introduce socket_fd as a variable */
 #define WAIT_FOR(OUTPUT, LEN, COND) \
     while((COND)) { \
         int ret = read_socket(socket_fd, (OUTPUT), (LEN)*sizeof(int), READ_TIMEOUT); \
@@ -94,6 +91,24 @@ typedef struct cmd_header_t {
             break; \
         } \
     }
+
+#define KILL_COND(SOCKET, OUTPUT, LEN, COND) \
+    int ret = read_socket((SOCKET),&OUTPUT,(LEN)*sizeof(int), READ_TIMEOUT); \
+    if(ret > 0) { /* todo if (len != size_args) */ \
+        /* Received the header. */ \
+        printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n", \
+               TO_ENUM(OUTPUT.cmd), OUTPUT.nb_args); \
+        if(COND) { /* ERR */ \
+            printf("»»»»»»»»»» Protocol expected another header.\n"); \
+            close(socket_fd); \
+            return false; \
+        } \
+    } else { \
+        printf("=======read_error=======len:%d\n", ret);/* shouldn't happen */ \
+        close(socket_fd); \
+        return false; \
+    }
+
 
 ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout);
 

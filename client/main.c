@@ -20,22 +20,27 @@ main (int argc, char *argv[argc + 1])
         provisioned_resources[i] = atoi (argv[i + 4]);
 
     /* Added to initialize the server "gracefully". */
-    ct_init_server(num_clients);
+    bool success_on_init = ct_init_server(num_clients);
 
-    client_thread *client_threads
-            = malloc (num_clients * sizeof (client_thread));
-    for (unsigned int i = 0; i < num_clients; i++)
-        ct_init (&(client_threads[i]));
+    if(success_on_init) {
+        client_thread *client_threads
+                = malloc(num_clients * sizeof(client_thread));
+        for (unsigned int i = 0; i < num_clients; i++)
+            ct_init(&(client_threads[i]));
 
-    for (unsigned int i = 0; i < num_clients; i++)
-    {
-        ct_create_and_start (&(client_threads[i]));
+        for (unsigned int i = 0; i < num_clients; i++) {
+            ct_create_and_start(&(client_threads[i]));
+        }
+
+        ct_wait_server();
+
+        /* Free all the memory allocated. */
+        free(client_threads);
+    } else {
+
+        /* Sends an `END` to the server because an error occured. */
+        ct_wait_server();
     }
-
-    ct_wait_server ();
-
-    /* Free all the memory allocated. todo: legal?*/
-    ct_free(client_threads);
 
     // Affiche le journal.
     ct_print_results (stdout, true);

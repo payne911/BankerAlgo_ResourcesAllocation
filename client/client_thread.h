@@ -20,10 +20,12 @@ extern int *provisioned_resources;
 typedef struct client_thread client_thread;
 struct client_thread
 {
-  unsigned int id;
-  pthread_t pt_tid;
-  pthread_attr_t pt_attr;
-  // todo: banker's vars
+    unsigned int id;
+    pthread_t pt_tid;
+    pthread_attr_t pt_attr;
+    // todo: banker's vars
+    int* alloc;
+    int* max;
 };
 
 
@@ -31,15 +33,21 @@ void ct_init (client_thread *);
 void ct_create_and_start (client_thread *);
 void ct_wait_server ();
 void ct_print_results (FILE *, bool);
-void send_request (int, int, int); // added here to relocate
 
 
 
 /* Our own methods.  todo: move to `client_thread.c` ? */
-void ct_free(client_thread *);
-void ct_init_server(int);
+void send_request (client_thread *, int, int); // modified and relocated
+bool ct_init_server(int);
+bool dispatch_resources(int);
 void setup_socket(int *, client_thread *);
 void terminate_client(client_thread *);
+void read_err(int, int, int);
+
+#define CLOSURE(SOCKET, CLIENT) \
+    close(SOCKET); \
+    terminate_client(CLIENT); \
+    pthread_exit (NULL)
 
 
 

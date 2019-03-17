@@ -22,9 +22,17 @@ void st_print_results (FILE *, bool);
 
 
 /* Our own methods. todo: move to `server_thread.c` ? */
-void st_free(server_thread *);
 void setup_socket(int *);
 void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug
+bool send_msg(int, char *, size_t);
+bool send_err(int, char *);
+
+// todo: remove this macro?
+#define ERR_COND(COND, MSG) \
+    if(COND) { \
+        send_err(socket_fd, MSG); \
+        break; \
+    }
 
 // protocol functions once the clients are initialized on the server
 void prot_begin     (int, bool *, int *, int);
@@ -36,13 +44,12 @@ void prot_wait      (int, bool *, int *, int);
 void prot_end       (int, bool *, int *, int);
 void prot_clo       (int, bool *, int *, int);
 void prot_err       (int, bool *, int *, int);
-void prot_nbcmd     (int, bool *, int *, int);
 void prot_unknown   (int, bool *, int *, int);
 
 
 /* Array of functions used to automatically call the good function on enums. */
 typedef void my_fct_type(int, bool *, int *, int);
-static my_fct_type *enum_func[NB_COMMANDS + 2] = {
+static my_fct_type *enum_func[NB_COMMANDS + 1] = {
         &prot_begin,
         &prot_conf,
         &prot_init,
@@ -52,7 +59,6 @@ static my_fct_type *enum_func[NB_COMMANDS + 2] = {
         &prot_end,
         &prot_clo,
         &prot_err,
-        &prot_nbcmd,
         &prot_unknown
 };
 #define FCT_ARR(NAME) \

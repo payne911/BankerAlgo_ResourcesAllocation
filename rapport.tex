@@ -16,13 +16,15 @@
 Côté client:
 Sémaphore pour tenter d'éviter le busy waiting sur la variable `count`.
 Fonction `st\_signal()` enlevée car le démonstrateur a dit qu'elle ne servait à rien.
-Fonctions `xt\_free()` ajoutées pour libérer les malloc des mains.
+Il a fallu rajouter des `free()` dans les `main` pour libérer proprement leur `malloc`.
 Plusieurs mutex au lieu d'un seul pour que le traitement soit plus efficace (meilleur parallélisme). Tous les compteurs sont protégés par leur propre mutex, mais on n'avait pas de besoin d'un mutex pour ce qui est touché par un unique thread (i.e. le count++ dans ct\_init)
 Certaines macros pour la lisibilité et rapidité de changement durant développement.
-Nouvelle méthode `ct\_init\_server()` qui permet d'initialiser le serveur de manière plus efficace. Notre solution précédente était d'utiliser un mutex ainsi qu'un booléen dans `ct\_code()`, mais on a alors autant de threads que de clients qui attendent que ce qu'un seul thread peut faire soit terminé.
+Nouvelle méthode `ct\_init\_server()` qui permet d'initialiser le serveur de manière plus efficace. Notre solution précédente était d'utiliser un mutex ainsi qu'un booléen dans `ct\_code()`, mais on a alors autant de threads que de clients qui attendent que ce qu'un seul thread peut faire soit terminé. Désormais, on utilise un booléen pour tout annuler en cas d'erreur durant l'initialisation du serveur.
 Détection de la dernière commande à l'intérieur du `for` parce qu'on dirait bien qu'on n'était pas supposé écrire à l'extérieur des TODO.
 Évitement des malloc le plus possible (en passant en paramètre des pointeurs de variables déclarées localement).
-
+La variable `nb\_registered\_clients` est utilisée pour attendre que tous les clients fassent leur `CLO` lors d'un appel à `END`.
+Les variables de comptage en lien avec `REQ` sont légèrement ouvertes à l'interprétation. Pour notre part, s'il y avait un nombre négatif qui indiquait le nombre d'arguments d'une requête `REQ` celle-ci n'est pas réellement comptée. Cependant, si c'est un nombre d'argument positif mais qui ne correspond pas à "num\_resources + 1", alors celle-ci est comptée comme une erreur.
+Signature de la fonction `send\_request()` a été modifiée pour avoir accès au struct `client\_thread`. Pas nécessaire, mais plus "clean".
 
 
 Côté serveur:
