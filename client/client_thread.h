@@ -23,7 +23,7 @@ struct client_thread
     unsigned int id;
     pthread_t pt_tid;
     pthread_attr_t pt_attr;
-    // todo: banker's vars
+    // todo (oli): banker's vars (utiles?) : use to mane sensical/logical requests
     int* alloc;
     int* max;
 };

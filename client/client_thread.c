@@ -84,10 +84,10 @@ ct_code (void *param)
             printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
                    ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
             if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
-                /* Initializing the algo's variables. */    // todo: hard-code edge-cases to test
+                /* Initializing the algo's variables. */
                 for(int i=0; i<num_resources; i++) {
                     ct->alloc[i] = 0;
-                    ct->max[i]   = args_s[i+1];
+                    ct->max[i]   = args_s[i+1]; // todo (oli): hard-code edge-cases to test (ex: all at 0)
                 }
                 loop = false;
                 close(socket_fd);
@@ -184,7 +184,7 @@ send_request (client_thread * ct, int request_id)
         for(int i=0; i<num_resources; i++) {
             args_s[i+1] = // max = borné par P_R
                     (rand() % (2*provisioned_resources[i]))
-                    - provisioned_resources[i];
+                    - provisioned_resources[i]; // todo (oli): hard-code edge-cases to test (ex: -1000)
         }
         printf("id %d sending REQ, arg0= %d\n", ct->id, args_s[0]);
         PRINT_EXTRACTED("REQ", head_s.nb_args, args_s);

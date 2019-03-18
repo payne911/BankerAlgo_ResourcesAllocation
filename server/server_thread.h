@@ -23,9 +23,10 @@ void st_print_results (FILE *, bool);
 
 /* Our own methods. todo: move to `server_thread.c` ? */
 void setup_socket(int *);
-void get_args(int socket_fd, cmd_header_t *header, int tmpId); // todo: last int just for debug
+void get_args(int, cmd_header_t *, int); // todo: last int just for debug
 bool send_msg(int, char *, size_t);
 bool send_err(int, char *);
+void bankAlgo(int *, int *, int);
 
 // todo: remove this macro?
 #define ERR_COND(COND, MSG) \
@@ -35,33 +36,36 @@ bool send_err(int, char *);
     }
 
 // protocol functions once the clients are initialized on the server
-void prot_begin     (int, bool *, int *, int);
-void prot_conf      (int, bool *, int *, int);
-void prot_init      (int, bool *, int *, int);
-void prot_req       (int, bool *, int *, int);
-void prot_ack       (int, bool *, int *, int);
-void prot_wait      (int, bool *, int *, int);
-void prot_end       (int, bool *, int *, int);
-void prot_clo       (int, bool *, int *, int);
-void prot_err       (int, bool *, int *, int);
-void prot_unknown   (int, bool *, int *, int);
+#define SIGNATURE(W,X,Y,Z) int W, bool *X, int *Y, int Z
+void prot_BEGIN   (SIGNATURE(,,,));
+void prot_CONF    (SIGNATURE(,,,));
+void prot_INIT    (SIGNATURE(,,,));
+void prot_REQ     (SIGNATURE(,,,));
+void prot_ACK     (SIGNATURE(,,,));
+void prot_WAIT    (SIGNATURE(,,,));
+void prot_END     (SIGNATURE(,,,));
+void prot_CLO     (SIGNATURE(,,,));
+void prot_ERR     (SIGNATURE(,,,));
+void prot_UNKNOWN (SIGNATURE(,,,));
 
 
 /* Array of functions used to automatically call the good function on enums. */
-typedef void my_fct_type(int, bool *, int *, int);
+typedef void my_fct_type(SIGNATURE(,,,));
 static my_fct_type *enum_func[NB_COMMANDS + 1] = {
-        &prot_begin,
-        &prot_conf,
-        &prot_init,
-        &prot_req,
-        &prot_ack,
-        &prot_wait,
-        &prot_end,
-        &prot_clo,
-        &prot_err,
-        &prot_unknown
+        &prot_BEGIN,
+        &prot_CONF,
+        &prot_INIT,
+        &prot_REQ,
+        &prot_ACK,
+        &prot_WAIT,
+        &prot_END,
+        &prot_CLO,
+        &prot_ERR,
+        &prot_UNKNOWN
 };
 #define FCT_ARR(NAME) \
-    void NAME (int socket_fd, bool *success, int* args, int len)
+    void NAME (SIGNATURE(socket_fd, success, args, len))
+
+
 
 #endif

@@ -53,21 +53,24 @@ unsigned int clients_ended = 0;
 int nbr_server_thread = 0;   // todo: utile?
 int *prov_res;               // todo: utile?
 
+typedef struct client { // todo (oli): try to integrate this or the approach
+    int id;
+    int *alloc;      // qty of each res allocated
+    int *max;        // max qty for each res
+    int *needed;     // max[i]-alloc[i] todo (oli): might not be necessary (can be calculated)
+    // bool visited; // todo (oli): maybe not necessary? (remember this is multi-threaded)
+} client;
+client *clients_list;       // todo (oli): utile? (à toi de voir...)
+
 // #proc = #_reg_clients     : n     : amount of processes
 int nbr_types_res;  //       : m     : amount of types of resources
 int *available;     // [j]   : m     : qty of res 'j' available
-//int **max;        // [i,j] : n x m : max qty of res 'j' used by 'i'
+//int **max;        // [i,j] : n x m : max qty of res 'j' used by 'i' // todo (oli): this is the "other approach"
 //int **alloc;      // [i,j] : n x m : qty of res 'j' allocated to 'i'
 //int **needed;     // [i,j] : n x m : needed[i,j] = max[i,j] - alloc[i,j]
 
 
-typedef struct client { // todo: try to integrate this other approach instead?
-    int id;
-    int *alloc;      // qty of each res allocated
-    int *max;        // max qty for each res
-    int *needed;     // max[i]-alloc[i] todo: might not be necessary (can be calculated)
-    // bool visited; // todo: not required?
-} client;
+
 
 
 pthread_mutex_t mut_c_accepted   = PTHREAD_MUTEX_INITIALIZER;
@@ -451,19 +454,19 @@ bool send_err(int socket_fd, char *msg) {
 /* Those functions are only reached after the initialisation of the server.  */
 /* void NAME (int socket_fd, bool *success, int* args, int len)              */
 
-FCT_ARR(prot_begin) {
+FCT_ARR(prot_BEGIN) {
     printf("received new BEGIN\n");
     send_err(socket_fd, "»»»»»»»»» Server already initialized.");
     *success = false; // shouldn't happen at that point
 }
 
-FCT_ARR(prot_conf) {
+FCT_ARR(prot_CONF) {
     printf("received new CONF\n");
     send_err(socket_fd, "»»»»»»»»» Resources already declared.");
     *success = false; // shouldn't happen at that point
 }
 
-FCT_ARR(prot_init) {
+FCT_ARR(prot_INIT) {
     printf("received new INIT\n");
     if(len != nbr_types_res+1) {
         send_err(socket_fd, "»»»»»»»»» `INIT` must refer to the right amount of resources.");
@@ -474,19 +477,29 @@ FCT_ARR(prot_init) {
 //        if(false) {
 //            send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.");
 //            *success = false;
+//            return;
 //        }
 
+        // todo: edge-case INIT with negative values?
+//        if(false) {
+//            send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.");
+//            *success = false;
+//            return;
+//        }
 
         /* New user is connecting. */
-        pthread_mutex_lock(&mut_c_dispatched);
-        count_dispatched++;
-        pthread_mutex_unlock(&mut_c_dispatched);
         pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients++;
         printf("number of clients: %d\n", nb_registered_clients);
         pthread_mutex_unlock(&mut_c_registered);
 
-        // todo (oli): update banker's vars
+        // todo (oli): create new client (malloc?) | args is guaranteed to be well-formed (but might be illogical, i.e. negative?)
+        client newClient;
+        newClient.id = args[0];
+        for(int i=0; i<nbr_types_res; i++) {
+            newClient.max[i] = args[i+1];
+        }
+
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
@@ -495,12 +508,11 @@ FCT_ARR(prot_init) {
     }
 }
 
-FCT_ARR(prot_req) {
+FCT_ARR(prot_REQ) {
     printf("received new REQ\n");
 
-    // todo: does it go here? ambiguous definition...
     pthread_mutex_lock(&mut_c_processed);
-    request_processed++;
+    request_processed++; // todo: does it go here? ambiguous definition...
     pthread_mutex_unlock(&mut_c_processed);
 
     if(len != nbr_types_res+1) {
@@ -517,40 +529,51 @@ FCT_ARR(prot_req) {
 //            *success = false;
 //        }
 
-        // todo (oli): BANKER ALGO
+        int result;
+        bankAlgo(&result, args, len);
 
-        // todo (oli): not necessarily `ACK 0` (depends on result from Banker Algo)
-        /* Send confirmation (`ACK 0`). */
-        pthread_mutex_lock(&mut_c_accepted);
-        count_accepted++;
-        pthread_mutex_unlock(&mut_c_accepted);
-        SEND_ACK(head_s);
-//        if(rand()%7 != 1 && (args[0] == 0 || args[1] == 3)) {
-//            TEST_WAIT(head_s, 3);
-//        } else {
-//            pthread_mutex_lock(&mut_c_accepted);
-//            count_accepted++;
-//            pthread_mutex_unlock(&mut_c_accepted);
-//            SEND_ACK(head_s);
-//        }
+        /* Sending appropriate response. */
+        switch(result) {
+            case ACK:
+                pthread_mutex_lock(&mut_c_accepted);
+                count_accepted++;
+                pthread_mutex_unlock(&mut_c_accepted);
+                SEND_ACK(head_sA);
+                break;
+            case WAIT:
+                pthread_mutex_lock(&mut_c_wait);
+                count_wait++;
+                pthread_mutex_unlock(&mut_c_wait);
+                TEST_WAIT(head_sW, 1);
+                break;
+            case ERR:
+                pthread_mutex_lock(&mut_c_invalid);
+                count_invalid++;
+                pthread_mutex_unlock(&mut_c_invalid);
+                send_err(socket_fd, "»»»»»»»»» illogical `REQ` request.\0");
+                break;
+            default:
+                printf("\n\n=============error in Banker's Algo=============\n");
+                break;
+        }
 
         *success = true;
     }
 }
 
-FCT_ARR(prot_ack) {
+FCT_ARR(prot_ACK) {
     printf("received new ACK\n");
     send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
     *success = false; // shouldn't happen
 }
 
-FCT_ARR(prot_wait) {
+FCT_ARR(prot_WAIT) {
     printf("received new WAIT\n");
     send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
     *success = false; // shouldn't happen
 }
 
-FCT_ARR(prot_end) {
+FCT_ARR(prot_END) {
     printf("received new END\n");
     if(len != 0) {
         send_err(socket_fd, "»»»»»»»»» `END` can only declare 0 arguments.");
@@ -564,7 +587,7 @@ FCT_ARR(prot_end) {
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
 
-        // todo : close down the server
+        // todo : close down the server (free all memory allocated)
 
         /* Freeing up the memory. */
         free(available);
@@ -574,8 +597,12 @@ FCT_ARR(prot_end) {
     }
 }
 
-FCT_ARR(prot_clo) {
+FCT_ARR(prot_CLO) {
     printf("received new CLO\n");
+    pthread_mutex_lock(&mut_c_ended);
+    clients_ended++; // todo: ambiguous definition, maybe not here?
+    pthread_mutex_unlock(&mut_c_ended);
+
     if(len != 1) {
         send_err(socket_fd, "»»»»»»»»» `CLO` must have only 1 argument.");
         *success = false;
@@ -583,9 +610,12 @@ FCT_ARR(prot_clo) {
 
         // todo: edge-case verify the `tid` arg exists among declared clients?
 
-        // todo: adjust banker's vars ?
+        // todo (oli): `free` banker's vars associated with client (probably should use mutex?)
 
         /* User is disconnecting. */
+        pthread_mutex_lock(&mut_c_dispatched);
+        count_dispatched++;
+        pthread_mutex_unlock(&mut_c_dispatched);
         pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients--;
         printf("number of clients: %d\n", nb_registered_clients);
@@ -598,17 +628,19 @@ FCT_ARR(prot_clo) {
     }
 }
 
-FCT_ARR(prot_err) {
+FCT_ARR(prot_ERR) {
     printf("received new ERR\n");
     send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
     *success = false; // shouldn't happen
 }
 
-FCT_ARR(prot_unknown) {
+FCT_ARR(prot_UNKNOWN) {
     printf("received new UNKNOWN\n");
     send_err(socket_fd, "»»»»»»»»» Invalid header.");
     *success = false; // shouldn't happen
 }
+
+
 
 
 
@@ -617,11 +649,32 @@ FCT_ARR(prot_unknown) {
             /*||  Banker Algorithm implemention  ||*/
             /*=====================================*/
 
-// todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
-// todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
-
 //void computeNeeded(int need[P][R], int max[P][R], int alloc[P][R]) {
 //    for (int i = 0 ; i < P ; i++)
 //        for (int j = 0 ; j < R ; j++)
 //            need[i][j] = maxm[i][j] - alloc[i][j];
 //}
+
+void bankAlgo(int *result, int *args, int len) {
+    /// `result` will contain the response that will be sent back to the client.
+    /// `args` contains the request of the client, without the header.
+    /// `args` is guaranteed to be well-formed, but not necessarily logical.
+    /// `len` equals the amount of integers that `args` contains.
+    /// `args` might be: { tid = 1, resA = 2, resB = -3, resC = 14 }, len = 4.
+
+    int id = args[0];
+
+    // todo (oli): faire l'algorithme du banquier ici
+    // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
+    // todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
+
+    // todo (oli): `*result` depends on result from Banker Algo
+    /* Just to introduce some randomness to test out stuff in the meantime. */
+    if(rand()%5 == 1 && (id == 0 || id == 1)) {
+        *result = WAIT;
+    } else if(rand()%10 == 1) {
+        *result = ERR;
+    } else {
+        *result = ACK;
+    }
+}
