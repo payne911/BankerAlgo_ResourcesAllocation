@@ -436,7 +436,7 @@ bool send_err(int socket_fd, char *msg) {
     /// To send an error message (`ERR`).
     /// `msg` must be terminated with a `\0`.
 
-    size_t len = strlen(msg)+1; // because doesn't inclue the NULL
+    size_t len = strlen(msg)+1; // add NULL char to count
     printf("......send_err: msg='%s' of size:%zu\n", msg, len);
 
 
