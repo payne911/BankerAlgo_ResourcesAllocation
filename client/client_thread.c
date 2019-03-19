@@ -48,7 +48,6 @@ ct_code (void *param)
     client_thread *ct = (client_thread *) param;
 
 
-    // TP2 TODO
     // Vous devez ici faire l'initialisation des petits clients (`INIT`).
 
 
@@ -92,23 +91,7 @@ ct_code (void *param)
                 loop = false;
                 close(socket_fd);
 
-            /* Alternative-cases handling. */
-            } else if(head_r.cmd == WAIT && head_r.nb_args == 1) {
-                /* Finding out how much time. */
-                int args_r[head_r.nb_args];
-                ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-                if(ret > 0) { // todo if (len != size_args)
-                    /* Received the args. */
-                    printf("»»»»»»»»»» Client %d : will wait %d sec.\n", ct->id, args_r[0]);
-                    PRINT_EXTRACTED("WAIT 1", head_r.nb_args, args_r);
-                    close(socket_fd);
-                    if(args_r[0] > 0)
-                        sleep(args_r[0]);
-                    // todo: args_r < 0 ?
-                } else {
-                    printf("=======read_error=======len:%d\n", ret); // shouldn't happen
-                    CLOSURE(socket_fd, ct);
-                }
+            /* Error handling (alt cases). */
             } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
                 printf("»»»»»»»»»» Client %d : received an `ERR`.\n", ct->id);
                 if(head_r.nb_args != 0)
@@ -124,33 +107,22 @@ ct_code (void *param)
         }
     } while(loop);
 
-//        WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
-//        printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
-//               ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
-//    close(socket_fd);
-
-    // TP2 TODO:END
-
     for (unsigned int request_id = 0; request_id < num_request_per_client; request_id++)
     {
 
-        // TP2 TODO
         // Vous devez ici coder, conjointement avec le corps de send request,
         // le protocole d'envoi de requête.
 
         send_request (ct, request_id);
 
-        /* After last request, trigger the `CLO`. */ // todo: legal to move below `for` ?
-        if(request_id == num_request_per_client - 1) {
-            printf("\n\nLast request of client %d is being sent\n", ct->id);
-            terminate_client(ct);
-        }
-
-        // TP2 TODO:END
 
         /* Attendre un petit peu (0s-0.1s) pour simuler le calcul. */
         usleep (random () % (100 * 1000));
     }
+
+    /* After last request, trigger the `CLO`. */
+    printf("\n\nLast request of client %d is being sent\n", ct->id);
+    terminate_client(ct);
 
     pthread_exit (NULL);
 }
@@ -165,8 +137,6 @@ ct_code (void *param)
 void
 send_request (client_thread * ct, int request_id)
     {
-
-    // TP2 TODO
 
     int socket_fd = -1;
     bool loop = true;
@@ -218,7 +188,8 @@ send_request (client_thread * ct, int request_id)
                 count_accepted++;
                 pthread_mutex_unlock(&mut_c_accepted);
 
-                /* Alternative-cases handling. */
+
+                /* Error handling (alt cases). */
             } else if(head_r.cmd == WAIT && head_r.nb_args == 1) {
 
                 /* Finding out how much time. */
@@ -234,11 +205,13 @@ send_request (client_thread * ct, int request_id)
                     close(socket_fd);
                     if(args_r[0] > 0)
                         sleep(args_r[0]);
-                    // todo: args_r < 0 ?
+                    if(args_r[0] < 0)
+                        loop = false; // todo: negative waiting time -> throw ERR
                 } else {
                     printf("=======read_error=======len:%d\n", ret); // shouldn't happen
                     close(socket_fd);
                 }
+
             } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
                 printf("»»»»»»»»»» Client %d : received an `ERR`.\n", ct->id);
                 pthread_mutex_lock(&mut_c_invalid);
@@ -257,8 +230,6 @@ send_request (client_thread * ct, int request_id)
         }
     } while(loop);
 
-    // TP2 TODO:END
-
 }
 
 
@@ -272,10 +243,8 @@ void
 ct_wait_server ()
 {
 
-    // TP2 TODO
-
     /* Waiting for ALL clients to disconnect with `CLO`. */
-    printf("Now waiting for all clients to `CLO`\n");
+    printf("MAIN THREAD now waiting for all clients to `CLO`\n");
     while(true) {
         sem_wait(&sem_pthread_join);
         if(count <= 0) break;
@@ -306,23 +275,6 @@ ct_wait_server ()
                 loop = false;
 
                 /* Alternative-cases handling. */
-//            } else if(head_r.cmd == WAIT && head_r.nb_args == 1) {
-//
-//                /* Finding out how much time. */
-//                int args_r[head_r.nb_args];
-//                ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-//                if(ret > 0) { // todo if (len != size_args)
-//                    /* Received the args. */
-//                    printf("»»»»»»»»»» MAIN THREAD : will wait %d sec.\n", args_r[0]);
-//                    PRINT_EXTRACTED("WAIT 1", head_r.nb_args, args_r);
-//                    close(socket_fd);
-//                    if(args_r[0] > 0)
-//                        sleep(args_r[0]);
-//                    // todo: args_r < 0 ?
-//                } else {
-//                    printf("=======read_error=======len:%d\n", ret); // shouldn't happen
-//                    close(socket_fd);
-//                }
             } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
                 printf("»»»»»»»»»» MAIN THREAD : received an `ERR`.\n");
                 if(head_r.nb_args != 0)
@@ -337,8 +289,6 @@ ct_wait_server ()
             close(socket_fd);
         }
     } while(loop);
-
-    // TP2 TODO:END
 
 }
 
@@ -508,9 +458,9 @@ void terminate_client(client_thread * client) {
     send_args(socket_fd, args_s, sizeof(args_s));
 
 
-    /* Await `ACK 0`. */        // todo could also be ERR or WAIT
+    /* Await `ACK 0`. */        // todo could also be ERR + remove WAIT_FOR ?
     INIT_HEAD_R(head_r);
-    WAIT_FOR(&head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
+    WAIT_FOR(socket_fd, &head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
     printf("-->id %d received head_r:(cmd_type=%s | nb_args=%d)\n",
            tid, TO_ENUM(head_r.cmd), head_r.nb_args);
 

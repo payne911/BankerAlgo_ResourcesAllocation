@@ -36,7 +36,7 @@ void ct_print_results (FILE *, bool);
 
 
 
-/* Our own methods.  todo: move to `client_thread.c` ? */
+/* Our own methods. */
 void send_request (client_thread *, int); // modified and relocated
 bool ct_init_server();
 bool dispatch_resources(int);

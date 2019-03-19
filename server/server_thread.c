@@ -90,8 +90,6 @@ st_init ()
     // Initialise le nombre de clients connecté.
     nb_registered_clients = 0;
 
-    // TODO
-
     // Attend la connection d'un client et initialise les structures pour
     // l'algorithme du banquier.
 
@@ -104,7 +102,6 @@ st_init ()
 
     /* Collect header from socket. Expecting `BEGIN 1`. */
     INIT_HEAD_R(head_r);
-//    WAIT_FOR(&head_r, 2, head_r.cmd != BEGIN && head_r.nb_args != 1);
     while(true) {
         int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
         if(ret > 0) { // todo if (len != size_args)
@@ -147,7 +144,6 @@ st_init ()
 
     /* Await `CONF` to set up the variables for the Banker-Algo. */
     INIT_HEAD_R(head_r2);
-//    WAIT_FOR(&head_r2, 2, head_r2.cmd != CONF && head_r2.nb_args < 1);
     while(true) {
         int ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
         if(ret > 0) { // todo if (len != size_args)
@@ -198,8 +194,6 @@ st_init ()
 
     printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
 
-
-    // END TODO
 }
 
 
@@ -207,7 +201,6 @@ st_init ()
 void
 st_process_requests (server_thread * st, int socket_fd)
 {
-    // TODO: Remplacer le contenu de cette fonction
 
     struct cmd_header_t header = { .nb_args = 0 };
 
@@ -352,8 +345,7 @@ void setup_socket(int *socket_fd) {
 }
 
 
-/* todo: remove the `tmpId` param after debugging */
-void get_args(int socket_fd, cmd_header_t *header, int tmpId) {
+void get_args(int socket_fd, cmd_header_t *header, int c_id) {
     printf("----get_args():  sockfd: %d | cmd: %s | nb_args: %d\n",
             socket_fd, TO_ENUM(header->cmd), header->nb_args);
 
@@ -375,7 +367,7 @@ void get_args(int socket_fd, cmd_header_t *header, int tmpId) {
             /* Edge-case: header has 0 arguments. */
             enum_func[header->cmd](socket_fd, &success, NULL, header->nb_args);
             printf("|__get_args():  Thread %d success bool on %s: %s\n",
-                   tmpId, TO_ENUM(header->cmd), success?"true":"false");
+                   c_id, TO_ENUM(header->cmd), success?"true":"false");
         } else {
 
             /* Extract the args now that we have the header! */
@@ -384,22 +376,22 @@ void get_args(int socket_fd, cmd_header_t *header, int tmpId) {
             if (len > 0) {
                 if (len != size_args) {
                     printf("|__get_args():  Thread %d received %s invalid command size=%d!\n",
-                           tmpId, TO_ENUM(header->cmd), len);
+                           c_id, TO_ENUM(header->cmd), len);
                 }
                 for(int i = 0; i < header->nb_args; i++) {
                     printf("|__get_args():  Thread %d received %s arg#%d: %d\n",
-                           tmpId, TO_ENUM(header->cmd), i, args[i]);
+                           c_id, TO_ENUM(header->cmd), i, args[i]);
                 }
 
                 /* Using an array of functions to execute the proper function. */
                 enum_func[header->cmd](socket_fd, &success, args, header->nb_args);
                 printf("|__get_args():  Thread %d success bool on %s: %s\n",
-                       tmpId, TO_ENUM(header->cmd), success?"true":"false");
+                       c_id, TO_ENUM(header->cmd), success?"true":"false");
 
             } else {
                 if (len == 0) {
                     fprintf(stderr, "|__get_args():  Thread %d, connection timeout on %s\n",
-                            tmpId, TO_ENUM(header->cmd));
+                            c_id, TO_ENUM(header->cmd));
                 }
             }
         }
@@ -474,14 +466,14 @@ FCT_ARR(prot_INIT) {
         *success = false;
     } else {
 
-//        // todo: edge-case INIT called twice by same client?
+//        // todo: edge-case INIT called twice by same client
 //        if(false) {
 //            send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.\0");
 //            *success = false;
 //            return;
 //        }
 
-        // todo: edge-case INIT with negative values?
+        // todo: edge-case INIT with negative values
 //        if(false) {
 //            send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.\0");
 //            *success = false;
@@ -525,7 +517,7 @@ FCT_ARR(prot_REQ) {
         *success = false;
     } else {
 
-//        // todo: edge-case verify the `tid` arg exists among declared clients?
+//        // todo: edge-case verify the `tid` arg exists among declared clients
 //        if(false) {
 //            send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.\0");
 //            *success = false;
@@ -610,7 +602,7 @@ FCT_ARR(prot_CLO) {
         *success = false;
     } else {
 
-        // todo: edge-case verify the `tid` arg exists among declared clients?
+        // todo: edge-case verify the `id` arg exists among declared clients
 
         // todo (oli): `free` banker's vars associated with client (probably should use mutex?)
 

@@ -79,12 +79,11 @@ typedef struct cmd_header_t {
         printf("-_=_-extracted from `%s` index %d = %d\n", (NAME), i, VAR[i]); \
     }
 
-/* todo: introduce socket_fd as a variable */
-#define WAIT_FOR(OUTPUT, LEN, COND) \
+#define WAIT_FOR(SOCKET, OUTPUT, LEN, COND) \
     while((COND)) { \
-        int ret = read_socket(socket_fd, (OUTPUT), (LEN)*sizeof(int), READ_TIMEOUT); \
+        int ret = read_socket(SOCKET, (OUTPUT), (LEN)*sizeof(int), READ_TIMEOUT); \
         if(ret > 0) { \
-            /* received the object (todo: possibly only partly?) */ \
+            /* received the object */ \
             break; \
         } else { \
             printf("=======e=bug========len=%d\n", ret); \

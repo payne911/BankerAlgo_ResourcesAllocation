@@ -21,19 +21,13 @@ void st_print_results (FILE *, bool);
 
 
 
-/* Our own methods. todo: move to `server_thread.c` ? */
+/* Our own methods. */
 void setup_socket(int *);
-void get_args(int, cmd_header_t *, int); // todo: last int just for debug
+void get_args(int, cmd_header_t *, int);
 bool send_msg(int, char *, size_t);
 bool send_err(int, char *);
 void bankAlgo(int *, int *, int);
 
-// todo: remove this macro?
-#define ERR_COND(COND, MSG) \
-    if(COND) { \
-        send_err(socket_fd, MSG); \
-        break; \
-    }
 
 // protocol functions once the clients are initialized on the server
 #define SIGNATURE(W,X,Y,Z) int W, bool *X, int *Y, int Z

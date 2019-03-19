@@ -32,6 +32,16 @@ On a conservé la fonction qui ne reçoit que le header en premier, et appelons 
 Utilisation d'un array de fonction pour gérer de façon élégante les différents comportements du serveur.
 
 
+Protocole:
+On utilise `id` plutôt que `tid` pour les communications.
+On a assumé que les `WAIT` ne sont des réponses qu'aux `REQ` des clients.
+
+
+Général:
+Les démonstrateurs nous ont dit qu'il était correcte de simplement `exit` et de ne pas tenter de `free` lors d'un erreur sur `malloc`.
+Un démonstrateur a aussi mentionné qu'il ne serait pas nécessaire de faire la vérification sur la variable de retour du `close(socket)`.
+On nous a dit de préciser cela: nous ne considérons pas que la requête `CLO` fait partie du nombre de requêtes que devrait envoyer un client. De plus, une requête `REQ` qui est réenvoyée à cause d'un `WAIT` n'est pas comptée comme étant une requête de plus (pour la statistique de `count\_request`) (todo: verify/clarify this claim).
+
 
 Algo du banquier:
 (oli)
