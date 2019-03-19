@@ -113,7 +113,7 @@ st_init ()
             if(head_r.cmd == BEGIN && head_r.nb_args == 1) {
                 break;
             } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.");
+                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.\0");
             }
         } else {
             printf("=======read_error=======len:%d\n", ret); // shouldn't happen
@@ -156,7 +156,7 @@ st_init ()
             if(head_r2.cmd == CONF && head_r2.nb_args >= 1) {
                 break;
             } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.");
+                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.\0");
             }
         } else {
             printf("=======read_error=======len:%d\n", ret); // shouldn't happen
@@ -434,8 +434,9 @@ bool send_msg(int fd, char *msg, size_t len) {
 
 bool send_err(int socket_fd, char *msg) {
     /// To send an error message (`ERR`).
+    /// `msg` must be terminated with a `\0`.
 
-    size_t len = strlen(msg);
+    size_t len = strlen(msg)+1; // because doesn't inclue the NULL
     printf("......send_err: msg='%s' of size:%zu\n", msg, len);
 
 
@@ -456,33 +457,33 @@ bool send_err(int socket_fd, char *msg) {
 
 FCT_ARR(prot_BEGIN) {
     printf("received new BEGIN\n");
-    send_err(socket_fd, "»»»»»»»»» Server already initialized.");
+    send_err(socket_fd, "»»»»»»»»» Server already initialized.\0");
     *success = false; // shouldn't happen at that point
 }
 
 FCT_ARR(prot_CONF) {
     printf("received new CONF\n");
-    send_err(socket_fd, "»»»»»»»»» Resources already declared.");
+    send_err(socket_fd, "»»»»»»»»» Resources already declared.\0");
     *success = false; // shouldn't happen at that point
 }
 
 FCT_ARR(prot_INIT) {
     printf("received new INIT\n");
     if(len != nbr_types_res+1) {
-        send_err(socket_fd, "»»»»»»»»» `INIT` must refer to the right amount of resources.");
+        send_err(socket_fd, "»»»»»»»»» `INIT` must refer to the right amount of resources.\0");
         *success = false;
     } else {
 
 //        // todo: edge-case INIT called twice by same client?
 //        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.");
+//            send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.\0");
 //            *success = false;
 //            return;
 //        }
 
         // todo: edge-case INIT with negative values?
 //        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.");
+//            send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.\0");
 //            *success = false;
 //            return;
 //        }
@@ -493,9 +494,10 @@ FCT_ARR(prot_INIT) {
         printf("number of clients: %d\n", nb_registered_clients);
         pthread_mutex_unlock(&mut_c_registered);
 
-        // todo (oli): create new client (malloc?) | args is guaranteed to be well-formed (but might be illogical, i.e. negative?)
+        // todo (oli): create new client | args is guaranteed to be well-formed (but might be illogical, i.e. negative?)
         client newClient;
         newClient.id = args[0];
+        newClient.max = malloc(nbr_types_res * sizeof(int)); // todo (oli): keep trace of the `newClient` so as to `free` it later
         for(int i=0; i<nbr_types_res; i++) {
             newClient.max[i] = args[i+1];
         }
@@ -519,13 +521,13 @@ FCT_ARR(prot_REQ) {
         pthread_mutex_lock(&mut_c_invalid);
         count_invalid++;
         pthread_mutex_unlock(&mut_c_invalid);
-        send_err(socket_fd, "»»»»»»»»» `REQ` must refer to the right amount of resources.");
+        send_err(socket_fd, "»»»»»»»»» `REQ` must refer to the right amount of resources.\0");
         *success = false;
     } else {
 
 //        // todo: edge-case verify the `tid` arg exists among declared clients?
 //        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.");
+//            send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.\0");
 //            *success = false;
 //        }
 
@@ -563,20 +565,20 @@ FCT_ARR(prot_REQ) {
 
 FCT_ARR(prot_ACK) {
     printf("received new ACK\n");
-    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
+    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.\0");
     *success = false; // shouldn't happen
 }
 
 FCT_ARR(prot_WAIT) {
     printf("received new WAIT\n");
-    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
+    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.\0");
     *success = false; // shouldn't happen
 }
 
 FCT_ARR(prot_END) {
     printf("received new END\n");
     if(len != 0) {
-        send_err(socket_fd, "»»»»»»»»» `END` can only declare 0 arguments.");
+        send_err(socket_fd, "»»»»»»»»» `END` can only declare 0 arguments.\0");
         *success = false;
     } else {
 
@@ -604,7 +606,7 @@ FCT_ARR(prot_CLO) {
     pthread_mutex_unlock(&mut_c_ended);
 
     if(len != 1) {
-        send_err(socket_fd, "»»»»»»»»» `CLO` must have only 1 argument.");
+        send_err(socket_fd, "»»»»»»»»» `CLO` must have only 1 argument.\0");
         *success = false;
     } else {
 
@@ -630,13 +632,13 @@ FCT_ARR(prot_CLO) {
 
 FCT_ARR(prot_ERR) {
     printf("received new ERR\n");
-    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.");
+    send_err(socket_fd, "»»»»»»»»» Clients shouldn't send this header.\0");
     *success = false; // shouldn't happen
 }
 
 FCT_ARR(prot_UNKNOWN) {
     printf("received new UNKNOWN\n");
-    send_err(socket_fd, "»»»»»»»»» Invalid header.");
+    send_err(socket_fd, "»»»»»»»»» Invalid header.\0");
     *success = false; // shouldn't happen
 }
 
