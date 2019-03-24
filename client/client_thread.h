@@ -23,7 +23,7 @@ struct client_thread
     unsigned int id;
     pthread_t pt_tid;
     pthread_attr_t pt_attr;
-    // todo (oli): banker's vars (utiles?) : use to mane sensical/logical requests
+    /* Added those to be able to make sensical requests. */
     int* alloc;
     int* max;
 };
@@ -49,6 +49,22 @@ void read_err(int, int, int);
     terminate_client(CLIENT); \
     pthread_exit (NULL)
 
+#define KILL_COND(SOCKET, OUTPUT, LEN, COND) \
+    int ret = read_socket((SOCKET),&OUTPUT,(LEN)*sizeof(int), READ_TIMEOUT); \
+    if(ret > 0) { \
+        /* Received the header. */ \
+        printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n", \
+               TO_ENUM(OUTPUT.cmd), OUTPUT.nb_args); \
+        if(COND) { /* ERR */ \
+            printf("»»»»»»»»»» Protocol expected another header.\n"); \
+            close(socket_fd); \
+            return false; \
+        } \
+    } else { \
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/ \
+        close(socket_fd); \
+        return false; \
+    }
 
 
 #endif // CLIENTTHREAD_H

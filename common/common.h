@@ -79,35 +79,6 @@ typedef struct cmd_header_t {
         printf("-_=_-extracted from `%s` index %d = %d\n", (NAME), i, VAR[i]); \
     }
 
-#define WAIT_FOR(SOCKET, OUTPUT, LEN, COND) \
-    while((COND)) { \
-        int ret = read_socket(SOCKET, (OUTPUT), (LEN)*sizeof(int), READ_TIMEOUT); \
-        if(ret > 0) { \
-            /* received the object */ \
-            break; \
-        } else { \
-            printf("=======e=bug========len=%d\n", ret); \
-            break; \
-        } \
-    }
-
-#define KILL_COND(SOCKET, OUTPUT, LEN, COND) \
-    int ret = read_socket((SOCKET),&OUTPUT,(LEN)*sizeof(int), READ_TIMEOUT); \
-    if(ret > 0) { /* todo if (len != size_args) */ \
-        /* Received the header. */ \
-        printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n", \
-               TO_ENUM(OUTPUT.cmd), OUTPUT.nb_args); \
-        if(COND) { /* ERR */ \
-            printf("»»»»»»»»»» Protocol expected another header.\n"); \
-            close(socket_fd); \
-            return false; \
-        } \
-    } else { \
-        printf("=======read_error=======len:%d\n", ret);/* shouldn't happen */ \
-        close(socket_fd); \
-        return false; \
-    }
-
 
 ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout);
 

@@ -54,58 +54,62 @@ ct_code (void *param)
     /* Allocating proper memory size for the algo. */
     size_t tmp = num_resources * sizeof(int);
     ct->alloc  = malloc(tmp);
+    if(ct->alloc == NULL) {
+        perror("malloc error");
+        exit(-1);
+    }
     ct->max    = malloc(tmp);
+    if(ct->max == NULL) {
+        perror("malloc error");
+        exit(-1);
+    }
 
 
-    bool loop = true;
-    do {
-        setup_socket(&socket_fd, ct);
+    setup_socket(&socket_fd, ct);
 
-        /* Declare the client's resources to the server.  (Send `INIT res+1`) */
-        INIT_HEAD_S(head_s, INIT, num_resources + 1);
-        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-        int args_s[num_resources + 1];
-        args_s[0] = ct->id;    // `tid` is the first argument
-        for (int i = 0; i < num_resources; i++)
-            args_s[i+1] = rand() % provisioned_resources[i];// max borné par P_R
-        printf("id %d sending INIT %d\n", ct->id, head_s.nb_args);
-        PRINT_EXTRACTED("INIT", head_s.nb_args, args_s);
-        send_args(socket_fd, args_s, sizeof(args_s));
+    /* Declare the client's resources to the server.  (Send `INIT res+1`) */
+    INIT_HEAD_S(head_s, INIT, num_resources + 1);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+    int args_s[num_resources + 1];
+    args_s[0] = ct->id;    // `tid` is the first argument
+    for (int i = 0; i < num_resources; i++)
+        args_s[i+1] = rand() % provisioned_resources[i];// max borné par P_R
+    printf("id %d sending INIT %d\n", ct->id, head_s.nb_args);
+    PRINT_EXTRACTED("INIT", head_s.nb_args, args_s);
+    send_args(socket_fd, args_s, sizeof(args_s));
 
 
-        /* Await and analyze response (expecting `ACK 0`). */
-        INIT_HEAD_R(head_r);
-        int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { /* todo if (len != size_args) */
+    /* Await and analyze response (expecting `ACK 0`). */
+    INIT_HEAD_R(head_r);
+    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
 
 
-            /* Received the header. */
-            printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
-                   ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
-            if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
-                /* Initializing the algo's variables. */
-                for(int i=0; i<num_resources; i++) {
-                    ct->alloc[i] = 0;
-                    ct->max[i]   = args_s[i+1]; // todo (oli): hard-code edge-cases to test (ex: all at 0)
-                }
-                loop = false;
-                close(socket_fd);
-
-            /* Error handling (alt cases). */
-            } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
-                printf("»»»»»»»»»» Client %d : received an `ERR`.\n", ct->id);
-                if(head_r.nb_args != 0)
-                    read_err(socket_fd, ct->id, head_r.nb_args);
-                CLOSURE(socket_fd, ct);
-            } else { // unexpected
-                printf("»»»»»»»»»» Protocol expected another header.\n");
-                CLOSURE(socket_fd, ct);
+        /* Received the header. */
+        printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
+               ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
+        if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
+            /* Initializing the algo's variables. */
+            for(int i=0; i<num_resources; i++) {
+                ct->alloc[i] = 0;
+                ct->max[i]   = args_s[i+1]; // todo : hard-code edge-cases to test (ex: all at 0)
             }
-        } else {
-            printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+            close(socket_fd);
+
+        /* Error handling (alt cases). */
+        } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
+            printf("»»»»»»»»»» Client %d : received an `ERR`.\n", ct->id);
+            if(head_r.nb_args != 0)
+                read_err(socket_fd, ct->id, head_r.nb_args);
+            CLOSURE(socket_fd, ct);
+        } else { // unexpected
+            printf("»»»»»»»»»» Protocol expected another header.\n");
             CLOSURE(socket_fd, ct);
         }
-    } while(loop);
+    } else {
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        CLOSURE(socket_fd, ct);
+    }
 
     for (unsigned int request_id = 0; request_id < num_request_per_client; request_id++)
     {
@@ -138,6 +142,20 @@ void
 send_request (client_thread * ct, int request_id)
     {
 
+    /* The request to be repeated until accepted. */
+    int args_s[num_resources+1];
+    args_s[0] = ct->id;       // `tid` is the first argument
+    for(int i=0; i<num_resources; i++) {
+        if(ct->max[i] == 0) {
+            args_s[i+1] = 0; // to prevent modulo 0
+        } else {
+            args_s[i+1] = (rand() % ct->max[i]) - ct->alloc[i];
+        }
+//            args_s[i+1] = // max = borné par P_R
+//                    (rand() % (2*provisioned_resources[i]))
+//                    - provisioned_resources[i]; // todo : hard-code edge-cases to test (ex: -1000)
+    }
+
     int socket_fd = -1;
     bool loop = true;
     do {
@@ -149,13 +167,14 @@ send_request (client_thread * ct, int request_id)
         /* Send resource request: `REQ`. */
         INIT_HEAD_S(head_s, REQ, num_resources+1);
         send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-        int args_s[num_resources+1];
-        args_s[0] = ct->id;       // `tid` is the first argument
-        for(int i=0; i<num_resources; i++) {
-            args_s[i+1] = // max = borné par P_R
-                    (rand() % (2*provisioned_resources[i]))
-                    - provisioned_resources[i]; // todo (oli): hard-code edge-cases to test (ex: -1000)
-        }
+//        int args_s[num_resources+1];
+//        args_s[0] = ct->id;       // `tid` is the first argument
+//        for(int i=0; i<num_resources; i++) {
+//            args_s[i+1] = (rand() % ct->max[i]) - ct->alloc[i];
+////            args_s[i+1] = // max = borné par P_R
+////                    (rand() % (2*provisioned_resources[i]))
+////                    - provisioned_resources[i]; // todo : hard-code edge-cases to test (ex: -1000)
+//        }
         printf("id %d sending REQ, arg0= %d\n", ct->id, args_s[0]);
         PRINT_EXTRACTED("REQ", head_s.nb_args, args_s);
         send_args(socket_fd, args_s, sizeof(args_s));
@@ -170,17 +189,15 @@ send_request (client_thread * ct, int request_id)
         /* Await and analyze response (expecting `ACK 0`). */
         INIT_HEAD_R(head_r);
         int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { /* todo if (len != size_args) */
+        if(ret > 0) {
 
 
             /* Received the header. */
             printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
                    ct->id, TO_ENUM(head_r.cmd), head_r.nb_args);
             if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
-                /* Initializing the algo's variables. */    // todo: hard-code edge-cases to test
                 for(int i=0; i<num_resources; i++) {
-                    ct->alloc[i] = 0;
-                    ct->max[i]   = args_s[i+1];
+                    ct->alloc[i] += args_s[i+1];
                 }
                 close(socket_fd);
                 loop = false;
@@ -195,7 +212,7 @@ send_request (client_thread * ct, int request_id)
                 /* Finding out how much time. */
                 int args_r[head_r.nb_args];
                 ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-                if(ret > 0) { // todo if (len != size_args)
+                if(ret > 0) {
                     /* Received the args. */
                     pthread_mutex_lock(&mut_c_wait);
                     count_on_wait++;
@@ -206,7 +223,7 @@ send_request (client_thread * ct, int request_id)
                     if(args_r[0] > 0)
                         sleep(args_r[0]);
                     if(args_r[0] < 0)
-                        loop = false; // todo: negative waiting time -> throw ERR
+                        printf("»»»»»»»» Negative WAIT time has been ignored.");
                 } else {
                     printf("=======read_error=======len:%d\n", ret); // shouldn't happen
                     close(socket_fd);
@@ -221,7 +238,7 @@ send_request (client_thread * ct, int request_id)
                     read_err(socket_fd, ct->id, head_r.nb_args);
                 close(socket_fd);
             } else { // unexpected
-                printf("»»»»»»»»»» Protocol expected another header.\n");
+                printf("»»»»»»»»»» Protocol expected something else.\n");
                 close(socket_fd);
             }
         } else {
@@ -265,7 +282,7 @@ ct_wait_server ()
         /* Await and analyze response (expecting `ACK 0`). */
         INIT_HEAD_R(head_r);
         int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { /* todo if (len != size_args) */
+        if(ret > 0) {
 
             /* Received the header. */
             printf("-->main received head_r:(cmd_type=%s | nb_args=%d)\n",
@@ -281,7 +298,7 @@ ct_wait_server ()
                     read_err(socket_fd, -1, head_r.nb_args);
                 close(socket_fd);
             } else { // unexpected
-                printf("»»»»»»»»»» Protocol expected another header.\n");
+                printf("»»»»»»»»»» Protocol expected something else.\n");
                 close(socket_fd);
             }
         } else {
@@ -371,7 +388,7 @@ bool ct_init_server() {
     /* Collecting RNG from socket. */
     int args_r[head_r.nb_args];
     ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-    if(ret > 0) { // todo if (len != size_args)
+    if(ret > 0) {
         /* Received the args. */
         printf("MAIN THREAD received RNG: %d | had sent RNG: %d\n", args_r[0], args_s[0]);
         PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
@@ -458,26 +475,37 @@ void terminate_client(client_thread * client) {
     send_args(socket_fd, args_s, sizeof(args_s));
 
 
-    /* Await `ACK 0`. */        // todo could also be ERR + remove WAIT_FOR ?
+    /* Await and analyze response (expecting `ACK 0`). */
     INIT_HEAD_R(head_r);
-    WAIT_FOR(socket_fd, &head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
-    printf("-->id %d received head_r:(cmd_type=%s | nb_args=%d)\n",
-           tid, TO_ENUM(head_r.cmd), head_r.nb_args);
+    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
 
 
-    /* Increment stats. */
-    pthread_mutex_lock(&mut_c_dispatched);
-    count_dispatched++;
-    pthread_mutex_unlock(&mut_c_dispatched);
+        /* Received the header. */
+        printf("--->id %d received:(cmd_type=%s | nb_args=%d)\n",
+               tid, TO_ENUM(head_r.cmd), head_r.nb_args);
+        if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
+            pthread_mutex_lock(&mut_c_dispatched);
+            count_dispatched++;
+            pthread_mutex_unlock(&mut_c_dispatched);
+
+        /* Error handling (alt cases). */
+        } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
+            printf("»»»»»»»»»» Client %d : received an `ERR`.\n", tid);
+            if(head_r.nb_args != 0)
+                read_err(socket_fd, tid, head_r.nb_args);
+        } else { // unexpected
+            printf("»»»»»»»»»» Protocol expected something else.\n");
+        }
+    } else {
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+    }
 
 
     /* Freeing the memory. */
     free(client->alloc);
     free(client->max);
 
-
-    printf("Client id %d using fd %d should be terminated on server-side.\n",
-            tid, socket_fd);
 
     pthread_mutex_lock(&mut_c_count);
     count--;
@@ -493,7 +521,7 @@ void read_err(int socket_fd, int id, int nb_chars) {
 
     char args_r[nb_chars];
     int ret = read_socket(socket_fd, &args_r, nb_chars*sizeof(char), READ_TIMEOUT);
-    if(ret > 0) { // todo if (len != size_args)
+    if(ret > 0) {
         /* Received the args. */
         if(id == -1) {
             printf("»»»»»»»»»» MAIN THREAD received `ERR %d` msg: '%s'\n", nb_chars, args_r);

@@ -50,24 +50,15 @@ unsigned int clients_ended = 0;
 
 // TODO: Ajouter vos structures de données partagées, ici.
 
-int nbr_server_thread = 0;   // todo: utile?
-int *prov_res;               // todo: utile?
-
-typedef struct client { // todo (oli): try to integrate this or the approach
+typedef struct client {
     int id;
     int *alloc;      // qty of each res allocated
     int *max;        // max qty for each res
-    int *needed;     // max[i]-alloc[i] todo (oli): might not be necessary (can be calculated)
-    // bool visited; // todo (oli): maybe not necessary? (remember this is multi-threaded)
 } client;
-client *clients_list;       // todo (oli): utile? (à toi de voir...)
+client *clients_list;
 
-// #proc = #_reg_clients     : n     : amount of processes
 int nbr_types_res;  //       : m     : amount of types of resources
 int *available;     // [j]   : m     : qty of res 'j' available
-//int **max;        // [i,j] : n x m : max qty of res 'j' used by 'i' // todo (oli): this is the "other approach"
-//int **alloc;      // [i,j] : n x m : qty of res 'j' allocated to 'i'
-//int **needed;     // [i,j] : n x m : needed[i,j] = max[i,j] - alloc[i,j]
 
 
 
@@ -104,13 +95,13 @@ st_init ()
     INIT_HEAD_R(head_r);
     while(true) {
         int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { // todo if (len != size_args)
+        if(ret > 0) {
             /* Received the header. */
             printf("received cmd_r:(cmd_type=%s | nb_args=%d)\n", TO_ENUM(head_r.cmd), head_r.nb_args);
             if(head_r.cmd == BEGIN && head_r.nb_args == 1) {
                 break;
             } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.\0");
+                send_err(socket_fd, "»»»»»»»»»» Protocol expected something else.\0");
             }
         } else {
             printf("=======read_error=======len:%d\n", ret); // shouldn't happen
@@ -121,7 +112,7 @@ st_init ()
     int args_r[head_r.nb_args];
     while(true) {
         int ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { // todo if (len != size_args)
+        if(ret > 0) {
             /* Received the args. */
             PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
             break;
@@ -146,13 +137,13 @@ st_init ()
     INIT_HEAD_R(head_r2);
     while(true) {
         int ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { // todo if (len != size_args)
+        if(ret > 0) {
             /* Received the header. */
             printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r2.cmd), head_r2.nb_args);
             if(head_r2.cmd == CONF && head_r2.nb_args >= 1) {
                 break;
             } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected another header.\0");
+                send_err(socket_fd, "»»»»»»»»»» Protocol expected something else.\0");
             }
         } else {
             printf("=======read_error=======len:%d\n", ret); // shouldn't happen
@@ -163,7 +154,7 @@ st_init ()
     int provs_r[head_r2.nb_args];
     while(true) {
         int ret = read_socket(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) { // todo if (len != size_args)
+        if(ret > 0) {
             /* Received the args. */
             PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r);
             break;
@@ -176,13 +167,14 @@ st_init ()
 
     /* Initializing the Banker-Algo's variables. */
     nbr_types_res = head_r2.nb_args;
-    size_t tmp = nbr_types_res * sizeof(int); // reused size of malloc
 
-    available = malloc(tmp); // todo: OOM
-    prov_res  = malloc(tmp);
+    available = malloc(nbr_types_res * sizeof(int));
+    if(available == NULL) {
+        perror("malloc error");
+        exit(-1);
+    }
     for (int i = 0; i < nbr_types_res; i++) {
         available[i] = provs_r[i];
-        prov_res[i]  = provs_r[i];
     }
 
 
@@ -466,33 +458,50 @@ FCT_ARR(prot_INIT) {
         *success = false;
     } else {
 
-//        // todo: edge-case INIT called twice by same client
-//        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.\0");
-//            *success = false;
-//            return;
-//        }
+        /* Edge-case: INIT called twice on same client id. */
+        for(int i=0; i<nb_registered_clients; i++) {
+            if(clients_list[i].id == args[0]) {
+                send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.\0");
+                *success = false;
+                return;
+            }
+        }
 
-        // todo: edge-case INIT with negative values
-//        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.\0");
-//            *success = false;
-//            return;
-//        }
+        /* Edge-case: INIT with negative values. */
+        for(int i=0 ; i<len; i++) {
+            if(args[i] < 0) {
+                send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.\0");
+                *success = false;
+                return;
+            }
+        }
 
         /* New user is connecting. */
         pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients++;
-        printf("number of clients: %d\n", nb_registered_clients);
+        printf("number of clients++: %d\n", nb_registered_clients);
         pthread_mutex_unlock(&mut_c_registered);
 
-        // todo (oli): create new client | args is guaranteed to be well-formed (but might be illogical, i.e. negative?)
+
+        /* Dynamically updating the list of clients. */
+        clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
         client newClient;
-        newClient.id = args[0];
-        newClient.max = malloc(nbr_types_res * sizeof(int)); // todo (oli): keep trace of the `newClient` so as to `free` it later
-        for(int i=0; i<nbr_types_res; i++) {
-            newClient.max[i] = args[i+1];
+        newClient.id    = args[0];
+        newClient.max   = malloc(nbr_types_res * sizeof(int));
+        if(newClient.max == NULL) {
+            perror("malloc error");
+            exit(-1);
         }
+        newClient.alloc = malloc(nbr_types_res * sizeof(int));
+        if(newClient.alloc == NULL) {
+            perror("malloc error");
+            exit(-1);
+        }
+        for(int i=0; i<nbr_types_res; i++) {
+            newClient.max[i]   = args[i+1];
+            newClient.alloc[i] = 0;
+        }
+        clients_list[nb_registered_clients-1] = newClient;
 
 
         /* Send confirmation (`ACK 0`). */
@@ -517,14 +526,28 @@ FCT_ARR(prot_REQ) {
         *success = false;
     } else {
 
-//        // todo: edge-case verify the `tid` arg exists among declared clients
-//        if(false) {
-//            send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.\0");
-//            *success = false;
-//        }
+        /* Edge-case: `id` doesn't exist among existing clients. */
+        int tmp = 0;
+        for(int i=0; i<nb_registered_clients; i++) {
+            if(args[0] == clients_list[i].id) {
+                tmp++;
+            }
+        }
+        if(tmp == 0) {
+            pthread_mutex_lock(&mut_c_invalid);
+            count_invalid++;
+            pthread_mutex_unlock(&mut_c_invalid);
+            send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.\0");
+            *success = false;
+            return;
+        }
 
+
+        /* Locking mutex on 'registered' to prevent INIT and CLO temporarily. */
+        pthread_mutex_lock(&mut_c_registered);
         int result;
-        bankAlgo(&result, args, len);
+        bankAlgo(&result, args);
+        pthread_mutex_unlock(&mut_c_registered);
 
         /* Sending appropriate response. */
         switch(result) {
@@ -581,11 +604,9 @@ FCT_ARR(prot_END) {
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
 
-        // todo : close down the server (free all memory allocated)
+        PRINT_EXTRACTED("available", nbr_types_res, available);
 
-        /* Freeing up the memory. */
         free(available);
-        free(prov_res);
 
         *success = true;
     }
@@ -593,27 +614,52 @@ FCT_ARR(prot_END) {
 
 FCT_ARR(prot_CLO) {
     printf("received new CLO\n");
-    pthread_mutex_lock(&mut_c_ended);
-    clients_ended++; // todo: ambiguous definition, maybe not here?
-    pthread_mutex_unlock(&mut_c_ended);
 
     if(len != 1) {
         send_err(socket_fd, "»»»»»»»»» `CLO` must have only 1 argument.\0");
         *success = false;
     } else {
 
-        // todo: edge-case verify the `id` arg exists among declared clients
+        /* Find the concerned registered client. */
+        int index = -1;
+        for(int i=0; i<nb_registered_clients; i++) {
+            if(clients_list[i].id == args[0]) {
+                index = i;
+                free(clients_list[i].max);
+                free(clients_list[i].alloc);
+            } else {
+                /* After finding client, make sure to reposition next arrays. */
+                if(index >= 0) {
+                    clients_list[i-1] = clients_list[i];
+                }
+            }
+        }
 
-        // todo (oli): `free` banker's vars associated with client (probably should use mutex?)
+        /* Edge-case: `id` doesn't actually exist. (`ERR` response.) */
+        if(index == -1) {
+            send_err(socket_fd, ">>>>>>>>> COULDN'T FIND INDEX OF CLIENT TO `CLO`\0");
+            return;
+        }
+
 
         /* User is disconnecting. */
+        pthread_mutex_lock(&mut_c_ended);
+        clients_ended++;
+        pthread_mutex_unlock(&mut_c_ended);
         pthread_mutex_lock(&mut_c_dispatched);
         count_dispatched++;
         pthread_mutex_unlock(&mut_c_dispatched);
+
         pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients--;
-        printf("number of clients: %d\n", nb_registered_clients);
+        printf("number of clients--: %d\n", nb_registered_clients);
+        clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
+        if(clients_list == NULL) {
+            perror("malloc error");
+            exit(-1);
+        }
         pthread_mutex_unlock(&mut_c_registered);
+
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
@@ -638,37 +684,125 @@ FCT_ARR(prot_UNKNOWN) {
 
 
 
-// todo (oli)
             /*=====================================*/
-            /*||  Banker Algorithm implemention  ||*/
+            /*    Banker Algorithm implemention    */
             /*=====================================*/
 
-//void computeNeeded(int need[P][R], int max[P][R], int alloc[P][R]) {
-//    for (int i = 0 ; i < P ; i++)
-//        for (int j = 0 ; j < R ; j++)
-//            need[i][j] = maxm[i][j] - alloc[i][j];
-//}
+void checkSafety(bool *isSafe) {
 
-void bankAlgo(int *result, int *args, int len) {
+    /* (Step 1) Constructing the basic arrays for the algorithm. */
+    SET_UP_BANK_VARS;
+
+
+    while(true) {
+
+        /* (Step 2) */
+        bool found = false;
+        for(int i=0; i<nb_registered_clients; i++) {
+            for(int j=0; j<nbr_types_res; j++) {
+                if( (finish[i] == false) && (needed[i][j] <= work[j]) ) {
+                    found = true;
+                    break;
+                }
+            }
+            if(found) break;
+        }
+
+
+        if(found) { /* (Step 3) */
+            for(int i=0; i<nb_registered_clients; i++) {
+                for(int j=0; j<nbr_types_res; j++) {
+                    work[j] += alloc[i][j];
+                    finish[i] = true;
+                }
+            }
+
+        } else {    /* (Step 4) */
+            int tmp = 0;
+            for(int i=0; i<nb_registered_clients; i++) {
+                if(finish[i] == true)
+                    tmp++;
+            }
+            if(tmp == nb_registered_clients) {
+                *isSafe = true;
+                break;
+            } else {
+                *isSafe = false;
+                break;
+            }
+        }
+    }
+}
+
+
+void bankAlgo(int *result, int *args) {
     /// `result` will contain the response that will be sent back to the client.
     /// `args` contains the request of the client, without the header.
     /// `args` is guaranteed to be well-formed, but not necessarily logical.
-    /// `len` equals the amount of integers that `args` contains.
-    /// `args` might be: { tid = 1, resA = 2, resB = -3, resC = 14 }, len = 4.
 
-    int id = args[0];
-
-    // todo (oli): faire l'algorithme du banquier ici
-    // todo see : http://rosettacode.org/wiki/Banker%27s_algorithm#C
-    // todo see : https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
-
-    // todo (oli): `*result` depends on result from Banker Algo
-    /* Just to introduce some randomness to test out stuff in the meantime. */
-    if(rand()%5 == 1 && (id == 0 || id == 1)) {
-        *result = WAIT;
-    } else if(rand()%10 == 1) {
-        *result = ERR;
-    } else {
-        *result = ACK;
+    /* Finding local index in clients array. */
+    int index = -1;
+    for(int i=0; i<nb_registered_clients; i++) {
+        if(clients_list[i].id == args[0]) {
+            index = i;
+            break;
+        }
     }
+
+    /* Error: couldn't find the client in the array. */
+    if(index == -1) {
+        *result = ERR;
+        return;
+    }
+
+    /* Setting up the basic arrays for the algorithm. */
+    SET_UP_BANK_VARS;
+
+
+    /* Checking out resources-allocation. */
+    PRINT_EXTRACTED("pre - max", nbr_types_res, clients_list[index].max);
+    PRINT_EXTRACTED("pre - alloc", nbr_types_res, clients_list[index].alloc);
+    for(int j=0; j<nbr_types_res; j++) {
+        if(args[j+1] > needed[index][j]
+        || args[j+1] + clients_list[index].alloc[j] < 0) { // todo: verify this
+            *result = ERR;
+            PRINT_EXTRACTED("pre - available - ERR", nbr_types_res, available);
+            return;
+        }
+        if(args[j+1] > available[j]) {
+            *result = WAIT;
+            PRINT_EXTRACTED("pre - available - WAIT", nbr_types_res, available);
+            return;
+        }
+
+        work[j]          -= args[j+1]; // todo: how is this useful?
+        alloc[index][j]  += args[j+1];
+        needed[index][j] -= args[j+1];
+    }
+
+    bool isSafe = false;
+    checkSafety(&isSafe);
+
+    if(isSafe) {
+        for(int j=0; j<nbr_types_res; j++) {
+            available[j] -= args[j+1];
+            clients_list[index].alloc[j] += args[j+1];
+        }
+        *result = ACK;
+        PRINT_EXTRACTED("post - available - ACK (end)", nbr_types_res, available);
+        PRINT_EXTRACTED("post - alloc     - ACK (end)", nbr_types_res, clients_list[index].alloc);
+    } else {
+        *result = WAIT;
+        PRINT_EXTRACTED("post - available - WAIT (end)", nbr_types_res, available);
+    }
+
+
+//    /* todo: Just to introduce some randomness to test out stuff in the meantime. */
+//    if(rand()%5 == 1 && (id == 0 || id == 1)) {
+//        *result = WAIT;
+//    } else if(rand()%10 == 1) {
+//        *result = ERR;
+//    } else {
+//        *result = ACK;
+//    }
 }

@@ -16,7 +16,6 @@ ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout) {
         if (ret > 0) {
             if (fds->revents & POLLIN) {
                 ret = recv(sockfd, (char*)buf + len, obj_sz - len, 0);
-                //printf("read_socket() : read_by_recv:%d index_read:%d pointer:%p size:%zu\n", ret, len, buf, sizeof(buf));
                 if (ret < 0) {
                     // abort connection
                     perror("recv()");

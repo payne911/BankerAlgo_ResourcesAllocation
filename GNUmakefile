@@ -35,8 +35,6 @@ $(BUILD_DIR)/%.o: %.c
 # Ici on utilise par défaut 3 threads du côté du serveur et 5 du côté
 # du client.  Chaque client envoie 50 requêtes.  Il a 5 types de resources
 # à gérer avec quantités respectivement 10, 4, 23, 1, et 2.
-# todo: client should send 50 on THREE places, not 4 (2018 5 50   10 4 23 1 2)
-# todo: #clients should be 5  on THREE places, not 3 (2018 5 50   10 4 23 1 2)
 run: all
 	$(BUILD_DIR)/tp2_server 2018 3 & \
 	$(BUILD_DIR)/tp2_client 2018 5 50   10 4 23 1 2 & \
