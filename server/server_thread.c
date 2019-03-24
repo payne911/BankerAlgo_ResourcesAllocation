@@ -652,11 +652,15 @@ FCT_ARR(prot_CLO) {
 
         pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients--;
-        printf("number of clients--: %d\n", nb_registered_clients);
-        clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
-        if(clients_list == NULL) {
-            perror("malloc error");
-            exit(-1);
+        printf("number of clients--: %d | index=%d\n", nb_registered_clients, index);
+        if(nb_registered_clients == 0) {
+            free(clients_list);
+        } else {
+            clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
+            if (clients_list == NULL) {
+                perror("malloc error");
+                exit(-1);
+            }
         }
         pthread_mutex_unlock(&mut_c_registered);
 
