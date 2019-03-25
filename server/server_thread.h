@@ -60,20 +60,5 @@ static my_fct_type *enum_func[NB_COMMANDS + 1] = {
 #define FCT_ARR(NAME) \
     void NAME (SIGNATURE(socket_fd, success, args, len))
 
-#define SET_UP_BANK_VARS \
-    bool finish[nb_registered_clients]; \
-    int  work  [nbr_types_res]; \
-    int  max   [nbr_types_res][nb_registered_clients]; \
-    int  alloc [nbr_types_res][nb_registered_clients]; \
-    int  needed[nbr_types_res][nb_registered_clients]; \
-    for(int i=0; i<nb_registered_clients; i++) { \
-        work[i]   = available[i]; /* todo: useful? */ \
-        finish[i] = false; \
-        for(int j=0; j<nbr_types_res; j++) { \
-            max   [i][j] = clients_list[i].max[j]; \
-            alloc [i][j] = clients_list[i].alloc[j]; \
-            needed[i][j] = max[i][j] - alloc[i][j]; \
-        } \
-    }
 
 #endif

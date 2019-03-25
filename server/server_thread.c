@@ -316,11 +316,10 @@ st_print_results (FILE * fd, bool verbose)
 
 
 
-            /*
-             *#################################################
-             *#              ADDITIONAL METHODS               #
-             *#################################################
-             */
+
+            /*#################################################*/
+            /*#              ADDITIONAL METHODS               #*/
+            /*#################################################*/
 
 
 
@@ -405,7 +404,7 @@ bool send_msg(int fd, char *msg, size_t len) {
         } else if (l == 0) {
             fprintf(stderr, "send_msg(): empty?\n");
             break;
-        } else if (errno == EINTR) { // a signal occured before any data was transmitted
+        } else if (errno == EINTR) { // signal occured before any data transmitted
             continue;
         } else {
             perror("send()");
@@ -434,10 +433,11 @@ bool send_err(int socket_fd, char *msg) {
 
 
 
-
-/* Functions to treat each type of command's response individually.          */
-/* Those functions are only reached after the initialisation of the server.  */
-/* void NAME (int socket_fd, bool *success, int* args, int len)              */
+/*============================================================================*/
+/*      Functions to treat each type of command's response individually.      */
+/*  Those functions are only reached after the initialisation of the server.  */
+/*        void NAME (int socket_fd, bool *success, int* args, int len)        */
+/*============================================================================*/
 
 FCT_ARR(prot_BEGIN) {
     printf("received new BEGIN\n");
@@ -458,9 +458,12 @@ FCT_ARR(prot_INIT) {
         *success = false;
     } else {
 
+        pthread_mutex_lock(&mut_c_registered);
+
         /* Edge-case: INIT called twice on same client id. */
         for(int i=0; i<nb_registered_clients; i++) {
             if(clients_list[i].id == args[0]) {
+                pthread_mutex_unlock(&mut_c_registered);
                 send_err(socket_fd, "»»»»»»»»» `INIT` can only be called once per client.\0");
                 *success = false;
                 return;
@@ -470,6 +473,7 @@ FCT_ARR(prot_INIT) {
         /* Edge-case: INIT with negative values. */
         for(int i=0 ; i<len; i++) {
             if(args[i] < 0) {
+                pthread_mutex_unlock(&mut_c_registered);
                 send_err(socket_fd, "»»»»»»»»» `INIT` cannot contain negative integers.\0");
                 *success = false;
                 return;
@@ -477,14 +481,16 @@ FCT_ARR(prot_INIT) {
         }
 
         /* New user is connecting. */
-        pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients++;
         printf("number of clients++: %d\n", nb_registered_clients);
-        pthread_mutex_unlock(&mut_c_registered);
 
 
         /* Dynamically updating the list of clients. */
         clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
+        if(clients_list == NULL) {
+            perror("realloc error");
+            exit(-1);
+        }
         client newClient;
         newClient.id    = args[0];
         newClient.max   = malloc(nbr_types_res * sizeof(int));
@@ -502,6 +508,8 @@ FCT_ARR(prot_INIT) {
             newClient.alloc[i] = 0;
         }
         clients_list[nb_registered_clients-1] = newClient;
+
+        pthread_mutex_unlock(&mut_c_registered);
 
 
         /* Send confirmation (`ACK 0`). */
@@ -526,6 +534,9 @@ FCT_ARR(prot_REQ) {
         *success = false;
     } else {
 
+        /* Locking mutex on 'registered' to prevent INIT and CLO temporarily. */
+        pthread_mutex_lock(&mut_c_registered);
+
         /* Edge-case: `id` doesn't exist among existing clients. */
         int tmp = 0;
         for(int i=0; i<nb_registered_clients; i++) {
@@ -534,6 +545,7 @@ FCT_ARR(prot_REQ) {
             }
         }
         if(tmp == 0) {
+            pthread_mutex_unlock(&mut_c_registered);
             pthread_mutex_lock(&mut_c_invalid);
             count_invalid++;
             pthread_mutex_unlock(&mut_c_invalid);
@@ -543,8 +555,7 @@ FCT_ARR(prot_REQ) {
         }
 
 
-        /* Locking mutex on 'registered' to prevent INIT and CLO temporarily. */
-        pthread_mutex_lock(&mut_c_registered);
+        /* Run the Banker's Algorithm. */
         int result;
         bankAlgo(&result, args);
         pthread_mutex_unlock(&mut_c_registered);
@@ -620,11 +631,16 @@ FCT_ARR(prot_CLO) {
         *success = false;
     } else {
 
+        pthread_mutex_lock(&mut_c_registered);
+
         /* Find the concerned registered client. */
         int index = -1;
         for(int i=0; i<nb_registered_clients; i++) {
             if(clients_list[i].id == args[0]) {
-                index = i;
+                index = i; // keep track of index in list
+                for(int j=0; j<nbr_types_res; j++) { // release all resources
+                    available[j] += clients_list[i].alloc[j];
+                }
                 free(clients_list[i].max);
                 free(clients_list[i].alloc);
             } else {
@@ -637,20 +653,12 @@ FCT_ARR(prot_CLO) {
 
         /* Edge-case: `id` doesn't actually exist. (`ERR` response.) */
         if(index == -1) {
+            pthread_mutex_unlock(&mut_c_registered);
             send_err(socket_fd, ">>>>>>>>> COULDN'T FIND INDEX OF CLIENT TO `CLO`\0");
             return;
         }
 
 
-        /* User is disconnecting. */
-        pthread_mutex_lock(&mut_c_ended);
-        clients_ended++;
-        pthread_mutex_unlock(&mut_c_ended);
-        pthread_mutex_lock(&mut_c_dispatched);
-        count_dispatched++;
-        pthread_mutex_unlock(&mut_c_dispatched);
-
-        pthread_mutex_lock(&mut_c_registered);
         nb_registered_clients--;
         printf("number of clients--: %d | index=%d\n", nb_registered_clients, index);
         if(nb_registered_clients == 0) {
@@ -664,6 +672,13 @@ FCT_ARR(prot_CLO) {
         }
         pthread_mutex_unlock(&mut_c_registered);
 
+        /* User is disconnecting. */
+        pthread_mutex_lock(&mut_c_ended);
+        clients_ended++;
+        pthread_mutex_unlock(&mut_c_ended);
+        pthread_mutex_lock(&mut_c_dispatched);
+        count_dispatched++;
+        pthread_mutex_unlock(&mut_c_dispatched);
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
@@ -692,52 +707,6 @@ FCT_ARR(prot_UNKNOWN) {
             /*    Banker Algorithm implemention    */
             /*=====================================*/
 
-void checkSafety(bool *isSafe) {
-
-    /* (Step 1) Constructing the basic arrays for the algorithm. */
-    SET_UP_BANK_VARS;
-
-
-    while(true) {
-
-        /* (Step 2) */
-        bool found = false;
-        for(int i=0; i<nb_registered_clients; i++) {
-            for(int j=0; j<nbr_types_res; j++) {
-                if( (finish[i] == false) && (needed[i][j] <= work[j]) ) {
-                    found = true;
-                    break;
-                }
-            }
-            if(found) break;
-        }
-
-
-        if(found) { /* (Step 3) */
-            for(int i=0; i<nb_registered_clients; i++) {
-                for(int j=0; j<nbr_types_res; j++) {
-                    work[j] += alloc[i][j];
-                    finish[i] = true;
-                }
-            }
-
-        } else {    /* (Step 4) */
-            int tmp = 0;
-            for(int i=0; i<nb_registered_clients; i++) {
-                if(finish[i] == true)
-                    tmp++;
-            }
-            if(tmp == nb_registered_clients) {
-                *isSafe = true;
-                break;
-            } else {
-                *isSafe = false;
-                break;
-            }
-        }
-    }
-}
-
 
 void bankAlgo(int *result, int *args) {
     /// `result` will contain the response that will be sent back to the client.
@@ -753,60 +722,99 @@ void bankAlgo(int *result, int *args) {
         }
     }
 
-    /* Error: couldn't find the client in the array. */
+    /* Error: couldn't find the client. */
     if(index == -1) {
         *result = ERR;
         return;
     }
 
-    /* Setting up the basic arrays for the algorithm. */
-    SET_UP_BANK_VARS;
+    /* Step 1: Setting up the arrays for the algorithm. */
+    bool finish[nb_registered_clients];
+    int  work  [nbr_types_res];
+    int  max   [nb_registered_clients][nbr_types_res];
+    int  alloc [nb_registered_clients][nbr_types_res];
+    int  needed[nb_registered_clients][nbr_types_res];
+    for(int i=0; i<nb_registered_clients; i++) {
+        finish[i] = false;
+        work[i]   = available[i];
+        for(int j=0; j<nbr_types_res; j++) {
+            max   [i][j] = clients_list[i].max[j];
+            alloc [i][j] = clients_list[i].alloc[j];
+            needed[i][j] = max[i][j] - alloc[i][j];
+        }
+    }
 
 
     /* Checking out resources-allocation. */
-    PRINT_EXTRACTED("pre - max", nbr_types_res, clients_list[index].max);
-    PRINT_EXTRACTED("pre - alloc", nbr_types_res, clients_list[index].alloc);
     for(int j=0; j<nbr_types_res; j++) {
         if(args[j+1] > needed[index][j]
-        || args[j+1] + clients_list[index].alloc[j] < 0) { // todo: verify this
+        || args[j+1] + clients_list[index].alloc[j] < 0) {
             *result = ERR;
-            PRINT_EXTRACTED("pre - available - ERR", nbr_types_res, available);
             return;
         }
         if(args[j+1] > available[j]) {
             *result = WAIT;
-            PRINT_EXTRACTED("pre - available - WAIT", nbr_types_res, available);
+            PRINT_EXTRACTED("available - asked too much (pre)", nbr_types_res, available);
             return;
         }
 
-        work[j]          -= args[j+1]; // todo: how is this useful?
+        /* Hypothetical state. */
+        work[j]          -= args[j+1];
         alloc[index][j]  += args[j+1];
         needed[index][j] -= args[j+1];
     }
 
+
+    /* Safety-check algorithm. */
     bool isSafe = false;
-    checkSafety(&isSafe);
+    while(true) {
+
+        /* (Step 2) */
+        bool found   = false;
+        int  current = -1;
+        for(int i=0; i<nb_registered_clients; i++) {
+            for(int j=0; j<nbr_types_res; j++) {
+                if( (finish[i] == false) && (needed[i][j] <= work[j]) ) {
+                    found   = true;
+                    current = i;
+                    break;
+                }
+            }
+            if(found) break;
+        }
+
+
+        if(found) { /* (Step 3) */
+            for(int j=0; j<nbr_types_res; j++) {
+                work[j] += alloc[current][j];
+                finish[current] = true;
+            }
+
+        } else {    /* (Step 4) */
+            int tmp = 0;
+            for(int i=0; i<nb_registered_clients; i++) {
+                if(finish[i] == true)
+                    tmp++;
+            }
+            if(tmp == nb_registered_clients) {
+                isSafe = true;
+                break;
+            } else {
+                isSafe = false;
+                break;
+            }
+        }
+    }
 
     if(isSafe) {
         for(int j=0; j<nbr_types_res; j++) {
+            /* Updating the real state. */
             available[j] -= args[j+1];
             clients_list[index].alloc[j] += args[j+1];
         }
         *result = ACK;
-        PRINT_EXTRACTED("post - available - ACK (end)", nbr_types_res, available);
-        PRINT_EXTRACTED("post - alloc     - ACK (end)", nbr_types_res, clients_list[index].alloc);
     } else {
         *result = WAIT;
-        PRINT_EXTRACTED("post - available - WAIT (end)", nbr_types_res, available);
+        PRINT_EXTRACTED("available - unsafe request (post)", nbr_types_res, available);
     }
-
-
-//    /* todo: Just to introduce some randomness to test out stuff in the meantime. */
-//    if(rand()%5 == 1 && (id == 0 || id == 1)) {
-//        *result = WAIT;
-//    } else if(rand()%10 == 1) {
-//        *result = ERR;
-//    } else {
-//        *result = ACK;
-//    }
 }

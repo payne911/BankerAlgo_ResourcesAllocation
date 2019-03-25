@@ -149,11 +149,8 @@ send_request (client_thread * ct, int request_id)
         if(ct->max[i] == 0) {
             args_s[i+1] = 0; // to prevent modulo 0
         } else {
-            args_s[i+1] = (rand() % ct->max[i]) - ct->alloc[i];
+            args_s[i+1] = (rand()%(ct->max[i]+1)) - ct->alloc[i];
         }
-//            args_s[i+1] = // max = borné par P_R
-//                    (rand() % (2*provisioned_resources[i]))
-//                    - provisioned_resources[i]; // todo : hard-code edge-cases to test (ex: -1000)
     }
 
     int socket_fd = -1;
@@ -167,14 +164,6 @@ send_request (client_thread * ct, int request_id)
         /* Send resource request: `REQ`. */
         INIT_HEAD_S(head_s, REQ, num_resources+1);
         send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-//        int args_s[num_resources+1];
-//        args_s[0] = ct->id;       // `tid` is the first argument
-//        for(int i=0; i<num_resources; i++) {
-//            args_s[i+1] = (rand() % ct->max[i]) - ct->alloc[i];
-////            args_s[i+1] = // max = borné par P_R
-////                    (rand() % (2*provisioned_resources[i]))
-////                    - provisioned_resources[i]; // todo : hard-code edge-cases to test (ex: -1000)
-//        }
         printf("id %d sending REQ, arg0= %d\n", ct->id, args_s[0]);
         PRINT_EXTRACTED("REQ", head_s.nb_args, args_s);
         send_args(socket_fd, args_s, sizeof(args_s));
