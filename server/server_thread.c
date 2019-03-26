@@ -48,7 +48,7 @@ unsigned int clients_ended = 0;
 
 
 
-// TODO: Ajouter vos structures de données partagées, ici.
+/* Nos structures de données partagées. */
 
 typedef struct client {
     int id;
@@ -93,7 +93,7 @@ st_init ()
 
     /* Collect header from socket. Expecting `BEGIN 1`. */
     INIT_HEAD_R(head_r);
-    while(true) {
+    while(true) { // todo: replace this `while` for error-management? (terminate)
         int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
         if(ret > 0) {
             /* Received the header. */
@@ -110,7 +110,7 @@ st_init ()
 
     /* Collecting RNG from socket. */
     int args_r[head_r.nb_args];
-    while(true) {
+    while(true) { // todo: replace this `while` for error-management? (terminate)
         int ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
         if(ret > 0) {
             /* Received the args. */
@@ -135,7 +135,7 @@ st_init ()
 
     /* Await `CONF` to set up the variables for the Banker-Algo. */
     INIT_HEAD_R(head_r2);
-    while(true) {
+    while(true) { // todo: replace this `while` for error-management? (terminate)
         int ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
         if(ret > 0) {
             /* Received the header. */
@@ -152,7 +152,7 @@ st_init ()
 
     /* Collecting args of `CONF`. */
     int provs_r[head_r2.nb_args];
-    while(true) {
+    while(true) { // todo: replace this `while` for error-management? (terminate)
         int ret = read_socket(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
         if(ret > 0) {
             /* Received the args. */
@@ -492,8 +492,8 @@ FCT_ARR(prot_INIT) {
             exit(-1);
         }
         client newClient;
-        newClient.id    = args[0];
-        newClient.max   = malloc(nbr_types_res * sizeof(int));
+        newClient.id  = args[0];
+        newClient.max = malloc(nbr_types_res * sizeof(int));
         if(newClient.max == NULL) {
             perror("malloc error");
             exit(-1);
@@ -523,7 +523,7 @@ FCT_ARR(prot_REQ) {
     printf("received new REQ\n");
 
     pthread_mutex_lock(&mut_c_processed);
-    request_processed++; // todo: does it go here? ambiguous definition...
+    request_processed++;
     pthread_mutex_unlock(&mut_c_processed);
 
     if(len != nbr_types_res+1) {
@@ -572,7 +572,11 @@ FCT_ARR(prot_REQ) {
                 pthread_mutex_lock(&mut_c_wait);
                 count_wait++;
                 pthread_mutex_unlock(&mut_c_wait);
-                TEST_WAIT(head_sW, 1);
+                cmd_header_t head_sW = {.cmd=WAIT, .nb_args=1};
+                send_header(socket_fd, &head_sW, sizeof(cmd_header_t));
+                int args_s[] = { 1 };
+                send_args(socket_fd, args_s, sizeof(args_s));
+                printf("sent `WAIT 1`\n");
                 break;
             case ERR:
                 pthread_mutex_lock(&mut_c_invalid);
@@ -666,7 +670,7 @@ FCT_ARR(prot_CLO) {
         } else {
             clients_list = realloc(clients_list, nb_registered_clients * sizeof(client));
             if (clients_list == NULL) {
-                perror("malloc error");
+                perror("realloc error");
                 exit(-1);
             }
         }
@@ -764,48 +768,46 @@ void bankAlgo(int *result, int *args) {
         needed[index][j] -= args[j+1];
     }
 
+    /**
+     * Safety-check algorithm.
+     *
+     * Adapted from:
+     * https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
+     */
+    int count = 0;
+    bool isSafe = true;
+    /* Step 4. */
+    while (count < nb_registered_clients) {
+        bool found = false;
 
-    /* Safety-check algorithm. */
-    bool isSafe = false;
-    while(true) {
+        /* Step 2. */
+        for (int i = 0; i < nb_registered_clients; i++) {
+            if (finish[i] == false) {
+                int j;
+                for (j = 0; j < nbr_types_res; j++) {
+                    if (needed[i][j] > work[j])
+                        break;
+                }
 
-        /* (Step 2) */
-        bool found   = false;
-        int  current = -1;
-        for(int i=0; i<nb_registered_clients; i++) {
-            for(int j=0; j<nbr_types_res; j++) {
-                if( (finish[i] == false) && (needed[i][j] <= work[j]) ) {
-                    found   = true;
-                    current = i;
-                    break;
+                /* Step 3. */
+                if (j == nbr_types_res) {
+                    for (int k = 0 ; k < nbr_types_res ; k++) {
+                        work[k] += alloc[i][k];
+                    }
+                    count++;
+                    finish[i] = true;
+                    found = true;
                 }
             }
-            if(found) break;
         }
 
-
-        if(found) { /* (Step 3) */
-            for(int j=0; j<nbr_types_res; j++) {
-                work[j] += alloc[current][j];
-                finish[current] = true;
-            }
-
-        } else {    /* (Step 4) */
-            int tmp = 0;
-            for(int i=0; i<nb_registered_clients; i++) {
-                if(finish[i] == true)
-                    tmp++;
-            }
-            if(tmp == nb_registered_clients) {
-                isSafe = true;
-                break;
-            } else {
-                isSafe = false;
-                break;
-            }
+        if (found == false) {
+            isSafe = false;
+            break;
         }
     }
 
+    /* Actualizing the result. */
     if(isSafe) {
         for(int j=0; j<nbr_types_res; j++) {
             /* Updating the real state. */
@@ -817,4 +819,15 @@ void bankAlgo(int *result, int *args) {
         *result = WAIT;
         PRINT_EXTRACTED("available - unsafe request (post)", nbr_types_res, available);
     }
+
+
+
+
+
+
+
+
+
+
+
 }

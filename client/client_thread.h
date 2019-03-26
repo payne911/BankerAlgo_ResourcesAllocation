@@ -39,7 +39,6 @@ void ct_print_results (FILE *, bool);
 /* Our own methods. */
 void send_request (client_thread *, int); // modified and relocated
 bool ct_init_server();
-bool dispatch_resources(int);
 void setup_socket(int *, client_thread *);
 void terminate_client(client_thread *);
 void read_err(int, int, int);

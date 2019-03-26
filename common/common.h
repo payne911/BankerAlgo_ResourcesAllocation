@@ -40,7 +40,7 @@ typedef struct cmd_header_t {
 
 
 /* Our own macros. */
-#define READ_TIMEOUT 4000 // 4 sec
+#define READ_TIMEOUT 30000 // 30 sec
 
 #define INIT_HEAD_R(NAME) \
     cmd_header_t NAME; \
@@ -55,12 +55,6 @@ typedef struct cmd_header_t {
     send_header(socket_fd, &NAME, sizeof(cmd_header_t)); \
     printf("sent `ACK 0`\n")
 
-#define TEST_WAIT(NAME, TIME) \
-    cmd_header_t NAME = {.cmd=WAIT, .nb_args=1}; \
-    send_header(socket_fd, &NAME, sizeof(cmd_header_t)); \
-    int args_s[] = { TIME }; \
-    send_args(socket_fd, args_s, sizeof(args_s)); \
-    printf("sent `WAIT 1`\n")
 
 #define TO_ENUM(x) \
     (x==BEGIN)?"`BEGIN`": \

@@ -92,7 +92,7 @@ ct_code (void *param)
             /* Initializing the algo's variables. */
             for(int i=0; i<num_resources; i++) {
                 ct->alloc[i] = 0;
-                ct->max[i]   = args_s[i+1]; // todo : hard-code edge-cases to test (ex: all at 0)
+                ct->max[i]   = args_s[i+1];
             }
             close(socket_fd);
 
@@ -392,30 +392,25 @@ bool ct_init_server() {
         close(socket_fd);
         return false;
     } else {
-        return dispatch_resources(socket_fd);
+
+        /* Send `CONF` to set up the variables for the Banker-Algo. */
+        INIT_HEAD_S(head_s, CONF, num_resources);
+        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+        printf("MAIN THREAD sending CONF | num_res=%d\n", num_resources);
+        PRINT_EXTRACTED("CONF", num_resources, provisioned_resources);
+        send_args(socket_fd, provisioned_resources, num_resources*sizeof(int));
+
+
+        /* Await `ACK 0`. */
+        INIT_HEAD_R(head_r);
+        KILL_COND(socket_fd, head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
+
+
+        /* This single-purpose client is over. */
+        printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
+        close(socket_fd);
+        return true;
     }
-}
-
-
-bool dispatch_resources(int socket_fd) {
-
-    /* Send `CONF` to set up the variables for the Banker-Algo. */
-    INIT_HEAD_S(head_s, CONF, num_resources);
-    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
-    printf("MAIN THREAD sending CONF | num_res=%d\n", num_resources);
-    PRINT_EXTRACTED("CONF", num_resources, provisioned_resources);
-    send_args(socket_fd, provisioned_resources, num_resources*sizeof(int));
-
-
-    /* Await `ACK 0`. */
-    INIT_HEAD_R(head_r);
-    KILL_COND(socket_fd, head_r, 2, head_r.cmd != ACK && head_r.nb_args != 0);
-
-
-    /* This single-purpose client is over. */
-    printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
-    close(socket_fd);
-    return true;
 }
 
 
