@@ -820,14 +820,4 @@ void bankAlgo(int *result, int *args) {
         PRINT_EXTRACTED("available - unsafe request (post)", nbr_types_res, available);
     }
 
-
-
-
-
-
-
-
-
-
-
 }
