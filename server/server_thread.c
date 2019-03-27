@@ -75,7 +75,7 @@ pthread_mutex_t mut_c_registered = PTHREAD_MUTEX_INITIALIZER;
 
 
 
-void
+bool
 st_init ()
 {
     // Initialise le nombre de clients connecté.
@@ -93,19 +93,20 @@ st_init ()
 
     /* Collect header from socket. Expecting `BEGIN 1`. */
     INIT_HEAD_R(head_r);
-    while(true) { // todo: replace this `while` for error-management? (terminate)
-        int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
-            /* Received the header. */
-            printf("received cmd_r:(cmd_type=%s | nb_args=%d)\n", TO_ENUM(head_r.cmd), head_r.nb_args);
-            if(head_r.cmd == BEGIN && head_r.nb_args == 1) {
-                break;
-            } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected something else.\0");
-            }
-        } else {
-            printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+    int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
+        /* Received the header. */
+        printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
+               TO_ENUM(head_r.cmd), head_r.nb_args);
+        if(head_r.cmd != BEGIN && head_r.nb_args != 1) { /* ERR */
+            printf("»»»»»»»»»» Protocol expected another header.\n");
+            close(socket_fd);
+            return false;
         }
+    } else {
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        close(socket_fd);
+        return false;
     }
 
     /* Collecting RNG from socket. */
@@ -135,19 +136,20 @@ st_init ()
 
     /* Await `CONF` to set up the variables for the Banker-Algo. */
     INIT_HEAD_R(head_r2);
-    while(true) { // todo: replace this `while` for error-management? (terminate)
-        int ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
-            /* Received the header. */
-            printf("received cmd_r:(cmd_type=%s | nb_args=%d))\n", TO_ENUM(head_r2.cmd), head_r2.nb_args);
-            if(head_r2.cmd == CONF && head_r2.nb_args >= 1) {
-                break;
-            } else {
-                send_err(socket_fd, "»»»»»»»»»» Protocol expected something else.\0");
-            }
-        } else {
-            printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+    ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
+        /* Received the header. */
+        printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
+               TO_ENUM(head_r2.cmd), head_r2.nb_args);
+        if(head_r2.cmd != CONF && head_r2.nb_args <= 1) { /* ERR */
+            printf("»»»»»»»»»» Protocol expected another header.\n");
+            close(socket_fd);
+            return false;
         }
+    } else {
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        close(socket_fd);
+        return false;
     }
 
     /* Collecting args of `CONF`. */
@@ -160,6 +162,8 @@ st_init ()
             break;
         } else {
             printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+            close(socket_fd);
+            return false;
         }
     }
 
@@ -167,7 +171,6 @@ st_init ()
 
     /* Initializing the Banker-Algo's variables. */
     nbr_types_res = head_r2.nb_args;
-
     available = malloc(nbr_types_res * sizeof(int));
     if(available == NULL) {
         perror("malloc error");
@@ -181,11 +184,9 @@ st_init ()
 
     /* Send confirmation (`ACK 0`). */
     SEND_ACK(head_s2);
-
     close(socket_fd);
-
     printf("\n-=-=-=-=-\ndone initializing BANK ALGO vars\n-=-=-=-=-\n\n");
-
+    return true;
 }
 
 
@@ -738,9 +739,10 @@ void bankAlgo(int *result, int *args) {
     int  max   [nb_registered_clients][nbr_types_res];
     int  alloc [nb_registered_clients][nbr_types_res];
     int  needed[nb_registered_clients][nbr_types_res];
+    for(int j=0; j<nbr_types_res; j++)
+        work[j] = available[j];
     for(int i=0; i<nb_registered_clients; i++) {
         finish[i] = false;
-        work[i]   = available[i];
         for(int j=0; j<nbr_types_res; j++) {
             max   [i][j] = clients_list[i].max[j];
             alloc [i][j] = clients_list[i].alloc[j];
@@ -795,8 +797,8 @@ void bankAlgo(int *result, int *args) {
                         work[k] += alloc[i][k];
                     }
                     count++;
-                    finish[i] = true;
                     found = true;
+                    finish[i] = true;
                 }
             }
         }

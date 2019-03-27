@@ -14,7 +14,6 @@ struct server_thread
 };
 
 void st_open_socket (int port_number);
-void st_init (void);
 void st_process_requests (server_thread *, int);
 void *st_code (void *);
 void st_print_results (FILE *, bool);
@@ -22,6 +21,7 @@ void st_print_results (FILE *, bool);
 
 
 /* Our own methods. */
+bool st_init (void); // modified return type for more control on protocol
 void setup_socket(int *);
 void get_args(int, cmd_header_t *, int);
 bool send_msg(int, char *, size_t);

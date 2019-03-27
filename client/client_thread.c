@@ -73,7 +73,7 @@ ct_code (void *param)
     int args_s[num_resources + 1];
     args_s[0] = ct->id;    // `tid` is the first argument
     for (int i = 0; i < num_resources; i++)
-        args_s[i+1] = rand() % provisioned_resources[i];// max borné par P_R
+        args_s[i+1] = rand() % (provisioned_resources[i]+1);// max borné par P_R
     printf("id %d sending INIT %d\n", ct->id, head_s.nb_args);
     PRINT_EXTRACTED("INIT", head_s.nb_args, args_s);
     send_args(socket_fd, args_s, sizeof(args_s));
@@ -302,6 +302,7 @@ ct_wait_server ()
 void
 ct_init (client_thread * ct)
 {
+    srand(time(NULL)); // different seed for each thread
     ct->id = count++;
 }
 
@@ -353,6 +354,8 @@ ct_print_results (FILE * fd, bool verbose)
 
 bool ct_init_server() {
     /// Initializes the server properly before clients get "instanciated".
+
+    srand(time(NULL));
 
     /* Used for the ct_wait */
     sem_init(&sem_pthread_join, 0, 0);

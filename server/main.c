@@ -14,27 +14,28 @@ main (int argc, char *argv[argc + 1])
 
     int port_number = atoi (argv[1]);
     int num_server_threads = atoi (argv[2]);
-    server_thread *st = malloc (num_server_threads * sizeof (server_thread));
 
     // Ouvre un socket
     st_open_socket (port_number);
 
-    // Initialise le serveur.
-    st_init ();
+    /* Initialise le serveur avec gestion d'erreur. */
+    bool success_on_init = st_init ();
+    if(success_on_init) {
+        server_thread *st = malloc (num_server_threads * sizeof (server_thread));
 
-    // Part les fils d'exécution.
-    for (unsigned int i = 0; i < num_server_threads; i++)
-    {
-        st[i].id = i;
-        pthread_attr_init (&(st[i].pt_attr));
-        pthread_create (&(st[i].pt_tid), &(st[i].pt_attr), &st_code, &(st[i]));
+        // Part les fils d'exécution.
+        for (unsigned int i = 0; i < num_server_threads; i++) {
+            st[i].id = i;
+            pthread_attr_init(&(st[i].pt_attr));
+            pthread_create(&(st[i].pt_tid), &(st[i].pt_attr), &st_code, &(st[i]));
+        }
+
+        for (unsigned int i = 0; i < num_server_threads; i++)
+            pthread_join(st[i].pt_tid, NULL);
+
+        /* Free all the memory allocated.*/
+        free(st);
     }
-
-    for (unsigned int i = 0; i < num_server_threads; i++)
-        pthread_join (st[i].pt_tid, NULL);
-
-    /* Free all the memory allocated.*/
-    free(st);
 
     // Affiche le journal.
     st_print_results (stdout, true);
