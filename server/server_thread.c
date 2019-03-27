@@ -16,7 +16,7 @@ enum { NUL = '\0' };
 
 enum {
     /* Configuration constants. */
-    max_wait_time = 30,
+    max_wait_time = 10,
     server_backlog_size = 5
 };
 
@@ -176,9 +176,8 @@ st_init ()
         perror("malloc error");
         exit(-1);
     }
-    for (int i = 0; i < nbr_types_res; i++) {
+    for (int i = 0; i < nbr_types_res; i++)
         available[i] = provs_r[i];
-    }
 
 
 
@@ -349,9 +348,7 @@ void get_args(int socket_fd, cmd_header_t *header, int c_id) {
 
     if(header->cmd >= NB_COMMANDS || header->cmd < BEGIN || header->nb_args < 0) {
         /* Undefined header. */
-        printf(">>>>>>>>modified header for UNKNOWN<<<<<<<<\n");
-        header->cmd = NB_COMMANDS + 1;   // assign the error function
-        enum_func[header->cmd](socket_fd, &success, NULL, header->nb_args);
+        TRIGGER_ERROR;
     } else {
 
         /* Header is well-defined. */
@@ -369,6 +366,7 @@ void get_args(int socket_fd, cmd_header_t *header, int c_id) {
                 if (len != size_args) {
                     printf("|__get_args():  Thread %d received %s invalid command size=%d!\n",
                            c_id, TO_ENUM(header->cmd), len);
+                    TRIGGER_ERROR;
                 }
                 for(int i = 0; i < header->nb_args; i++) {
                     printf("|__get_args():  Thread %d received %s arg#%d: %d\n",
@@ -384,6 +382,7 @@ void get_args(int socket_fd, cmd_header_t *header, int c_id) {
                 if (len == 0) {
                     fprintf(stderr, "|__get_args():  Thread %d, connection timeout on %s\n",
                             c_id, TO_ENUM(header->cmd));
+                    TRIGGER_ERROR;
                 }
             }
         }
@@ -515,7 +514,6 @@ FCT_ARR(prot_INIT) {
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
-
         *success = true;
     }
 }
@@ -619,11 +617,8 @@ FCT_ARR(prot_END) {
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
-
         PRINT_EXTRACTED("available", nbr_types_res, available);
-
         free(available);
-
         *success = true;
     }
 }
@@ -687,7 +682,6 @@ FCT_ARR(prot_CLO) {
 
         /* Send confirmation (`ACK 0`). */
         SEND_ACK(head_s);
-
         *success = true;
     }
 }

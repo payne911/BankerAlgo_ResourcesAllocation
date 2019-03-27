@@ -40,7 +40,7 @@ typedef struct cmd_header_t {
 
 
 /* Our own macros. */
-#define READ_TIMEOUT 30000 // 30 sec
+#define READ_TIMEOUT 20000 // unit=ms
 
 #define INIT_HEAD_R(NAME) \
     cmd_header_t NAME; \

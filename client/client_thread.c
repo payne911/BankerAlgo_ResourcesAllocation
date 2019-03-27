@@ -226,13 +226,16 @@ send_request (client_thread * ct, int request_id)
                 if(head_r.nb_args != 0)
                     read_err(socket_fd, ct->id, head_r.nb_args);
                 close(socket_fd);
+                break;
             } else { // unexpected
                 printf("»»»»»»»»»» Protocol expected something else.\n");
                 close(socket_fd);
+                break;
             }
         } else {
             printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
             close(socket_fd);
+            break;
         }
     } while(loop);
 
@@ -260,42 +263,32 @@ ct_wait_server ()
 
 
     int socket_fd = -1;
-    bool loop = true;
-    do {
-        setup_socket(&socket_fd, NULL);
+    setup_socket(&socket_fd, NULL);
 
-        /* Terminate the server. */
-        INIT_HEAD_S(head_s, END, 0);
-        send_header(socket_fd, &head_s, sizeof(cmd_header_t));
+    /* Terminate the server. */
+    INIT_HEAD_S(head_s, END, 0);
+    send_header(socket_fd, &head_s, sizeof(cmd_header_t));
 
-        /* Await and analyze response (expecting `ACK 0`). */
-        INIT_HEAD_R(head_r);
-        int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
+    /* Await and analyze response (expecting `ACK 0`). */
+    INIT_HEAD_R(head_r);
+    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
 
-            /* Received the header. */
-            printf("-->main received head_r:(cmd_type=%s | nb_args=%d)\n",
-                   TO_ENUM(head_r.cmd), head_r.nb_args);
-            if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
-                close(socket_fd);
-                loop = false;
-
-                /* Alternative-cases handling. */
-            } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
-                printf("»»»»»»»»»» MAIN THREAD : received an `ERR`.\n");
-                if(head_r.nb_args != 0)
-                    read_err(socket_fd, -1, head_r.nb_args);
-                close(socket_fd);
-            } else { // unexpected
-                printf("»»»»»»»»»» Protocol expected something else.\n");
-                close(socket_fd);
-            }
-        } else {
-            printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
-            close(socket_fd);
+        printf("-->main received head_r:(cmd_type=%s | nb_args=%d)\n",
+               TO_ENUM(head_r.cmd), head_r.nb_args);
+        /* Alternative-cases handling. */
+        if(head_r.cmd == ERR && head_r.nb_args >= 0) {
+            printf("»»»»»»»»»» MAIN THREAD : received an `ERR`.\n");
+            if(head_r.nb_args != 0)
+                read_err(socket_fd, -1, head_r.nb_args);
+        } else { // unexpected
+            printf("»»»»»»»»»» Protocol expected something else.\n");
         }
-    } while(loop);
+    } else {
+        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+    }
 
+    close(socket_fd);
 }
 
 
