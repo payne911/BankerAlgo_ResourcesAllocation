@@ -52,13 +52,13 @@ unsigned int clients_ended = 0;
 
 typedef struct client {
     int id;
-    int *alloc;      // qty of each res allocated
-    int *max;        // max qty for each res
+    int *alloc;        // quantity of each resource allocated
+    int *max;          // max quantity for each resource
 } client;
-client *clients_list;
+client *clients_list;  // list of all the registered clients
 
-int nbr_types_res;  //       : m     : amount of types of resources
-int *available;     // [j]   : m     : qty of res 'j' available
+int nbr_types_res;     // the amount of resources
+int *available;        // vector of the available quantity of each resource type
 
 
 
@@ -727,7 +727,7 @@ void bankAlgo(int *result, int *args) {
         return;
     }
 
-    /* Step 1: Setting up the arrays for the algorithm. */
+    /* (Step 1) Setting up the arrays for the algorithm. */
     bool finish[nb_registered_clients];
     int  work  [nbr_types_res];
     int  max   [nb_registered_clients][nbr_types_res];
@@ -764,42 +764,44 @@ void bankAlgo(int *result, int *args) {
         needed[index][j] -= args[j+1];
     }
 
-    /**
-     * Safety-check algorithm.
-     *
-     * Adapted from:
-     * https://www.geeksforgeeks.org/program-bankers-algorithm-set-1-safety-algorithm/
-     */
-    int count = 0;
-    bool isSafe = true;
-    /* Step 4. */
-    while (count < nb_registered_clients) {
-        bool found = false;
 
-        /* Step 2. */
-        for (int i = 0; i < nb_registered_clients; i++) {
-            if (finish[i] == false) {
-                int j;
-                for (j = 0; j < nbr_types_res; j++) {
-                    if (needed[i][j] > work[j])
-                        break;
-                }
+    /* Safety-check algorithm. */
+    int counter = 0;
+    bool isSafe = false;
+    while(true) {
 
-                /* Step 3. */
-                if (j == nbr_types_res) {
-                    for (int k = 0 ; k < nbr_types_res ; k++) {
-                        work[k] += alloc[i][k];
-                    }
-                    count++;
-                    found = true;
-                    finish[i] = true;
-                }
+        /* (Step 2) */
+        bool found   = false;
+        int  current = -1;
+        for(int i=0; i<nb_registered_clients; i++) {
+            int j;
+            for(j=0; j<nbr_types_res; j++) {
+                if( (finish[i] == true) || (needed[i][j] > work[j]) )
+                    break; // don't increment if not what we are looking for
+            }
+            if(j == nbr_types_res) {
+                found = true; // found a logical request
+                current = i;  // index of the client to be checked
+                counter++;    // one more client fits in the sequence
+                break;        // don't search further for now
             }
         }
 
-        if (found == false) {
-            isSafe = false;
-            break;
+
+        if(found) { /* (Step 3) */
+            for(int j=0; j<nbr_types_res; j++) {
+                work[j] += alloc[current][j]; // fake execution of valid request
+                finish[current] = true;
+            }
+
+        } else {    /* (Step 4) */
+            if(counter == nb_registered_clients) {
+                isSafe = true; // we have found a safe sequence to execute
+                break;
+            } else {
+                isSafe = false;
+                break;
+            }
         }
     }
 
@@ -811,6 +813,8 @@ void bankAlgo(int *result, int *args) {
             clients_list[index].alloc[j] += args[j+1];
         }
         *result = ACK;
+//        PRINT_EXTRACTED("post - available - ACK (end)", nbr_types_res, available);
+//        PRINT_EXTRACTED("post - alloc     - ACK (end)", nbr_types_res, clients_list[index].alloc);
     } else {
         *result = WAIT;
         PRINT_EXTRACTED("available - unsafe request (post)", nbr_types_res, available);

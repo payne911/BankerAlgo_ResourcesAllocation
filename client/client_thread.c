@@ -276,8 +276,11 @@ ct_wait_server ()
 
         printf("-->main received head_r:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r.cmd), head_r.nb_args);
+        if(head_r.cmd == ACK && head_r.nb_args == 0) { // expected
+            printf("Communication is over.\n");
+
         /* Alternative-cases handling. */
-        if(head_r.cmd == ERR && head_r.nb_args >= 0) {
+        } else if(head_r.cmd == ERR && head_r.nb_args >= 0) {
             printf("»»»»»»»»»» MAIN THREAD : received an `ERR`.\n");
             if(head_r.nb_args != 0)
                 read_err(socket_fd, -1, head_r.nb_args);
