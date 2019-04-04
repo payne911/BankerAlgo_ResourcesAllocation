@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "server_thread.h"
 #include <pthread.h>
 

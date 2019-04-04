@@ -1,14 +1,19 @@
 //#define _XOPEN_SOURCE 700   /* So as to allow use of `fdopen` and `getline`.  */
 
+#include "common.h"
 #include "server_thread.h"
 
+#include <netinet/in.h>
 #include <netdb.h>
 
 #include <strings.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
 #include <sys/poll.h>
+#include <sys/socket.h>
 
 #include <time.h>
 
