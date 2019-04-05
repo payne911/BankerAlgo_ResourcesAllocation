@@ -49,8 +49,8 @@ void read_err(int, int, int);
     pthread_exit (NULL)
 
 #define KILL_COND(SOCKET, OUTPUT, LEN, COND) \
-    int ret = read_socket((SOCKET),&OUTPUT,(LEN)*sizeof(int), READ_TIMEOUT); \
-    if(ret > 0) { \
+    bool ret = read_all((SOCKET),&OUTPUT,(LEN)*sizeof(int), READ_TIMEOUT); \
+    if(ret) { \
         /* Received the header. */ \
         printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n", \
                TO_ENUM(OUTPUT.cmd), OUTPUT.nb_args); \
@@ -60,7 +60,7 @@ void read_err(int, int, int);
             return false; \
         } \
     } else { \
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/ \
+        printf("=======read_error=======\n"); /* shouldn't happen */ \
         close(socket_fd); \
         return false; \
     }

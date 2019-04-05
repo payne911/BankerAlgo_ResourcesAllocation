@@ -48,7 +48,7 @@ unsigned int count_dispatched = 0;
 // Nbr total de requête (REQ) traités.
 unsigned int request_processed = 0;
 
-// Nbr de clients ayant envoyé le message CLO.
+// Nbr de clients ayant envoyé le message CLO (avec succès*).
 unsigned int clients_ended = 0;
 
 
@@ -98,8 +98,8 @@ st_init ()
 
     /* Collect header from socket. Expecting `BEGIN 1`. */
     INIT_HEAD_R(head_r);
-    int ret = read_socket(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    bool ret = read_all(socket_fd, &head_r, 2 * sizeof(int), READ_TIMEOUT);
+    if(ret) {
         /* Received the header. */
         printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r.cmd), head_r.nb_args);
@@ -108,17 +108,17 @@ st_init ()
             CLOSURE;
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        printf("=======read_error=======\n"); // shouldn't happen
         CLOSURE;
     }
 
     /* Collecting RNG from socket. */
     int args_r[head_r.nb_args];
-    ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    ret = read_all(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
+    if(ret) {
         PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
     } else {
-        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        printf("=======read_error=======\n"); // shouldn't happen
         CLOSURE;
     }
 
@@ -136,8 +136,8 @@ st_init ()
 
     /* Await `CONF` to set up the variables for the Banker-Algo. */
     INIT_HEAD_R(head_r2);
-    ret = read_socket(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    ret = read_all(socket_fd, &head_r2, 2 * sizeof(int), READ_TIMEOUT);
+    if(ret) {
         /* Received the header. */
         printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r2.cmd), head_r2.nb_args);
@@ -146,17 +146,17 @@ st_init ()
             CLOSURE;
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        printf("=======read_error=======\n"); // shouldn't happen
         CLOSURE;
     }
 
     /* Collecting args of `CONF`. */
     int provs_r[head_r2.nb_args];
-    ret = read_socket(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    ret = read_all(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
+    if(ret) {
         PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r);
     } else {
-        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        printf("=======read_error=======\n"); // shouldn't happen
         CLOSURE;
     }
 
@@ -631,13 +631,20 @@ FCT_ARR(prot_CLO) {
         for(int i=0; i<nb_registered_clients; i++) {
             if(clients_list[i].id == args[0]) {
                 index = i; // keep track of index in list
-                for(int j=0; j<nbr_types_res; j++) { // release all resources
-                    available[j] += clients_list[i].alloc[j];
+
+                /* Ensure all resources were freed prior to `CLO`. */
+                for(int j=0; j<nbr_types_res; j++) {
+                    if(clients_list[i].alloc[j] != 0) {
+                        pthread_mutex_unlock(&mut_c_registered);
+                        send_err(socket_fd, "»»»»»»»» CANNOT `CLO` BEFORE RELEASING EVERYTHING.\0");
+                        return;
+                    }
                 }
+
                 free(clients_list[i].max);
                 free(clients_list[i].alloc);
             } else {
-                /* After finding client, make sure to reposition next arrays. */
+                /* After finding client, make sure to reposition next ones. */
                 if(index >= 0) {
                     clients_list[i-1] = clients_list[i];
                 }
@@ -647,7 +654,7 @@ FCT_ARR(prot_CLO) {
         /* Edge-case: `id` doesn't actually exist. (`ERR` response.) */
         if(index == -1) {
             pthread_mutex_unlock(&mut_c_registered);
-            send_err(socket_fd, ">>>>>>>>> COULDN'T FIND INDEX OF CLIENT TO `CLO`\0");
+            send_err(socket_fd, "»»»»»»»»» COULDN'T FIND INDEX OF CLIENT TO `CLO`\0");
             return;
         }
 
@@ -747,7 +754,8 @@ void bankAlgo(int *result, int *args) {
         }
         if(args[j+1] > available[j]) {
             *result = WAIT;
-            PRINT_EXTRACTED("    available - asked too much (pre)", nbr_types_res, available);
+            PRINT_EXTRACTED("    available - asked too much (pre)    ",
+                    nbr_types_res, available);
             return;
         }
 
@@ -808,7 +816,8 @@ void bankAlgo(int *result, int *args) {
         *result = ACK;
     } else {
         *result = WAIT;
-        PRINT_EXTRACTED("    available - unsafe request (post)", nbr_types_res, available);
+        PRINT_EXTRACTED("    available - unsafe request (post)    ",
+                nbr_types_res, available);
     }
 
 }

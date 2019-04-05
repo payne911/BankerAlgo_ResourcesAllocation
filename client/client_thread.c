@@ -81,8 +81,8 @@ ct_code (void *param)
 
     /* Await and analyze response (expecting `ACK 0`). */
     INIT_HEAD_R(head_r);
-    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    bool ret = read_all(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret) {
 
 
         /* Received the header. */
@@ -107,7 +107,7 @@ ct_code (void *param)
             CLOSURE(socket_fd, ct);
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        printf("=======read_error=======\n"); // shouldn't happen
         CLOSURE(socket_fd, ct);
     }
 
@@ -147,9 +147,15 @@ send_request (client_thread * ct, int request_id)
     args_s[0] = ct->id;       // `tid` is the first argument
     for(int i=0; i<num_resources; i++) {
         if(ct->max[i] == 0) {
-            args_s[i+1] = 0; // to prevent modulo 0
+            args_s[i+1] = 0;  // to prevent modulo 0
         } else {
-            args_s[i+1] = (rand()%(ct->max[i]+1)) - ct->alloc[i];
+
+            /* Last `REQ` must release all resources. */
+            if(request_id != num_request_per_client-1){
+                args_s[i+1] = (rand()%(ct->max[i]+1)) - ct->alloc[i];
+            } else {
+                args_s[i+1] = -(ct->alloc[i]);
+            }
         }
     }
 
@@ -177,8 +183,8 @@ send_request (client_thread * ct, int request_id)
 
         /* Await and analyze response (expecting `ACK 0`). */
         INIT_HEAD_R(head_r);
-        int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
+        bool ret = read_all(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+        if(ret) {
 
 
             /* Received the header. */
@@ -200,8 +206,8 @@ send_request (client_thread * ct, int request_id)
 
                 /* Finding out how much time. */
                 int args_r[head_r.nb_args];
-                ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-                if(ret > 0) {
+                ret = read_all(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
+                if(ret) {
                     /* Received the args. */
                     pthread_mutex_lock(&mut_c_wait);
                     count_on_wait++;
@@ -214,7 +220,7 @@ send_request (client_thread * ct, int request_id)
                     if(args_r[0] < 0)
                         printf("»»»»»»»» Negative WAIT time has been ignored.");
                 } else {
-                    printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+                    printf("=======read_error=======\n"); // shouldn't happen
                     close(socket_fd);
                 }
 
@@ -233,7 +239,7 @@ send_request (client_thread * ct, int request_id)
                 break;
             }
         } else {
-            printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+            printf("=======read_error=======\n"); // shouldn't happen
             close(socket_fd);
             break;
         }
@@ -271,8 +277,8 @@ ct_wait_server ()
 
     /* Await and analyze response (expecting `ACK 0`). */
     INIT_HEAD_R(head_r);
-    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    bool ret = read_all(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret) {
 
         printf("-->main received head_r:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r.cmd), head_r.nb_args);
@@ -288,7 +294,7 @@ ct_wait_server ()
             printf("»»»»»»»»»» Protocol expected something else.\n");
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        printf("=======read_error=======\n"); // shouldn't happen
     }
 
     close(socket_fd);
@@ -375,13 +381,13 @@ bool ct_init_server() {
 
     /* Collecting RNG from socket. */
     int args_r[head_r.nb_args];
-    ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    ret = read_all(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
+    if(ret) {
         /* Received the args. */
         printf("MAIN THREAD received RNG: %d | had sent RNG: %d\n", args_r[0], args_s[0]);
         PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
     } else {
-        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        printf("=======read_error=======\n"); // shouldn't happen
         close(socket_fd);
         return false;
     }
@@ -460,8 +466,8 @@ void terminate_client(client_thread * client) {
 
     /* Await and analyze response (expecting `ACK 0`). */
     INIT_HEAD_R(head_r);
-    int ret = read_socket(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
-    if(ret > 0) {
+    bool ret = read_all(socket_fd, &head_r, 2*sizeof(int), READ_TIMEOUT);
+    if(ret) {
 
 
         /* Received the header. */
@@ -481,7 +487,7 @@ void terminate_client(client_thread * client) {
             printf("»»»»»»»»»» Protocol expected something else.\n");
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
+        printf("=======read_error=======\n"); // shouldn't happen
     }
 
 
@@ -503,8 +509,8 @@ void read_err(int socket_fd, int id, int nb_chars) {
     /// `-1` as id means it's the MainThread.
 
     char args_r[nb_chars];
-    int ret = read_socket(socket_fd, &args_r, nb_chars*sizeof(char), READ_TIMEOUT);
-    if(ret > 0) {
+    bool ret = read_all(socket_fd, &args_r, nb_chars*sizeof(char), READ_TIMEOUT);
+    if(ret) {
         /* Received the args. */
         if(id == -1) {
             printf("»»»»»»»»»» MAIN THREAD received `ERR %d` msg: '%s'\n", nb_chars, args_r);
@@ -512,6 +518,6 @@ void read_err(int socket_fd, int id, int nb_chars) {
             printf("»»»»»»»»»» Client %d received `ERR %d` msg: '%s'\n", id, nb_chars, args_r);
         }
     } else {
-        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        printf("=======read_error=======\n"); // shouldn't happen
     }
 }

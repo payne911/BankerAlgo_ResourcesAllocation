@@ -44,6 +44,15 @@ ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout) {
              *#################################################
              */
 
+bool read_all(int sockfd, void *buf, size_t obj_sz, int timeout) {
+    /// Wrapper on "read_socket" to verify if the whole data was received.
+
+    int ret = read_socket(sockfd, buf, obj_sz, timeout);
+    if(ret != obj_sz) {
+        return false;
+    }
+    return true;
+}
 
 bool send_header(int fd, cmd_header_t *data, size_t len) {
     /// Send the data through the socket.

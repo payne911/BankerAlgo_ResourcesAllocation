@@ -7,7 +7,7 @@
 \usepackage{graphicx}
 
 \title{Travail pratique \#2 - IFT-2245}
-\author{Jérémi Grenier-Berthiaumet et Olivier Lepage-Applin} 
+\author{Jérémi Grenier-Berthiaume et Olivier Lepage-Applin}
 \begin{document}
 
 \maketitle
@@ -33,16 +33,15 @@ Finalement, pour accélérer le développement, nous avons créer un petit "info
 
 \begin{figure}
     \includegraphics[width=\linewidth]{infographic.png}
-    \caption{Notre infographique qui nous a été fort utile.}
+    \caption{Notre "infographique" qui nous a été fort utile.}
     \label{fig:infog}
 \end{figure}
 
 \subsection{Sockets}
 
-Il a été fortement apprécié d'avoir à notre disposition une fonction '\texttt{read\_socket}' mise à notre disposition. Cependant, nous avons tout de même eu à écrire nos propres fonctions pour s'occuper de l'écriture dans les sockets (l'envoie d'information). Ainsi, dans \texttt{common.c} nous avons ajouté \texttt{send\_header} et \texttt{send\_args}.
+Il a été fortement apprécié d'avoir à notre disposition une fonction '\texttt{read\_socket}' mise à notre disposition. Cependant, nous avons tout de même eu à écrire nos propres fonctions pour s'occuper de l'écriture dans les sockets (l'envoie d'information). Ainsi, dans \texttt{common.c} nous avons ajouté \texttt{send\_header} et \texttt{send\_args}. De plus, nous avons rajouté un \textit{wrapper} autour de \texttt{read\_socket} qui nous permet de s'assurer que ce qui devait être lu a bel et bien été lu en entier (la fonction \texttt{read\_all}).
 
 De plus, puisque le serveur pouvait envoyé des messages d'erreur (i.e. autre chose que des entiers), nous avons aussi ajouté dans \texttt{server\_thread.c} les fonctions \texttt{send\_msg} et \texttt{send\_err}. De façon générale, on utilise plutôt \texttt{send\_err} qui nous facilite la vie puisqu'on a alors qu'à passer une string (donc une chaîne de caractères terminée par un \texttt{NUL}).
-
 
 \subsection{Mutex}
 
@@ -76,6 +75,7 @@ Deuxièmement, un sémaphore a été utilisé afin de s'assurer d'éviter du \te
 
 Troisièmement, la signature de la fonction \texttt{send\_request} a été modifiée pour avoir accès au \textit{struct} `client\_thread`. Cela n'était pas nécessaire, mais rendait le tout plus "\textit{clean}".
 
+Finalement, le comportement lors de la réception d'une erreur n'étant pas très bien défini par le protocole présenté, nous avons fait certains choix arbitraires. Par exemple, s'il y a erreur durant le \texttt{CLO}, le \texttt{client\_thread} se termine de toute manière et libère ses \texttt{malloc}.
 
 \subsection{Côté serveur}
 
@@ -98,8 +98,12 @@ Aussi, les démonstrateurs nous ont dit qu'il était correcte de simplement \tex
 
 Un démonstrateur a aussi mentionné qu'il ne serait pas nécessaire de faire la vérification sur la variable de retour du \texttt{close(socket\_fd)}.
 
-Nous ne considérons pas que la requête \texttt{CLO} fait partie du nombre de requêtes que devrait envoyer un client.
+Nous ne considérons pas que la requête \texttt{CLO} fait partie du nombre de requêtes que devrait envoyer un client et c'est bel et bien la dernière requête d'un client qui s'occupe de libérer toutes les ressources.
 
-Certaines sections du code ont été enlevées (par exemple, la fonction \texttt{st\_signal}).
+Certaines sections du code ont été enlevées et/ou modifiées (par exemple, on nous a indiqué que la fonction \texttt{st\_signal} pouvait être supprimée).
+
+La gestion des interruptions par des signaux (comme \texttt{Ctrl+C}) n'a pas été faite puisque cela ne semblait pas nécessaire
+
+Plusieurs descriptions et noms de variables "statistiques" (les compteurs affichés à la fin de l'exécution) semblaient ambiguës ou contradictoire. Par exemple, \texttt{clients\_ended}, du côté serveur, a pour description \texttt{Nombre de clients ayant envoyé le message CLO}: que faire en cas d'erreur (donc réception d'un \texttt{CLO}, mais refus par le serveur)? Dans ce cas-là, par exemple, nous avons décidé de suivre le nom de la variable (i.e. que le compteur n'est incrémenté qu'en cas de succès).
 
 \end{document}

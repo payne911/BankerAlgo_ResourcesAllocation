@@ -77,6 +77,7 @@ typedef struct cmd_header_t {
 ssize_t read_socket(int sockfd, void *buf, size_t obj_sz, int timeout);
 
 /* Our own methods. */
+bool read_all(int, void *, size_t, int);
 bool send_header(int, cmd_header_t *, size_t);
 bool send_args  (int, int *, size_t);
 
