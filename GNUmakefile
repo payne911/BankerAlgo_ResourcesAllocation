@@ -60,11 +60,11 @@ clean:
 
 release:
 	tar -czv -f tp2.tar.gz --transform 's|^|tp2/|' \
-	    */*.[ch] *.tex *.md GNUmakefile
+	    */*.[ch] *.tex *.md *.png GNUmakefile
 
 release-mac:
 	gtar -czv -f tp2.tar.gz --transform 's|^|tp2/|' \
-	    */*.[ch] *.tex *.md GNUmakefile
+	    */*.[ch] *.tex *.md *.png GNUmakefile
 
 
 $(BUILD_DIR)/server/main.o $(BUILD_DIR)/server/server_thread.o: \
