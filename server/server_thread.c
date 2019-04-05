@@ -103,28 +103,23 @@ st_init ()
         /* Received the header. */
         printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r.cmd), head_r.nb_args);
-        if(head_r.cmd != BEGIN && head_r.nb_args != 1) { /* ERR */
+        if(head_r.cmd != BEGIN || head_r.nb_args != 1) { /* ERR */
             printf("»»»»»»»»»» Protocol expected another header.\n");
-            close(socket_fd);
-            return false;
+            CLOSURE;
         }
     } else {
         printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
-        close(socket_fd);
-        return false;
+        CLOSURE;
     }
 
     /* Collecting RNG from socket. */
     int args_r[head_r.nb_args];
-    while(true) { // todo: replace this `while` for error-management? (terminate)
-        int ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
-            /* Received the args. */
-            PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
-            break;
-        } else {
-            printf("=======read_error=======len:%d\n", ret); // shouldn't happen
-        }
+    ret = read_socket(socket_fd, &args_r, sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
+        PRINT_EXTRACTED("BEGIN 1", head_r.nb_args, args_r);
+    } else {
+        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        CLOSURE;
     }
 
 
@@ -146,30 +141,23 @@ st_init ()
         /* Received the header. */
         printf("-->MAIN THREAD received:(cmd_type=%s | nb_args=%d)\n",
                TO_ENUM(head_r2.cmd), head_r2.nb_args);
-        if(head_r2.cmd != CONF && head_r2.nb_args <= 1) { /* ERR */
+        if(head_r2.cmd != CONF || head_r2.nb_args <= 1) { /* ERR */
             printf("»»»»»»»»»» Protocol expected another header.\n");
-            close(socket_fd);
-            return false;
+            CLOSURE;
         }
     } else {
         printf("=======read_error=======len:%d\n", ret);/*shouldn't happen*/
-        close(socket_fd);
-        return false;
+        CLOSURE;
     }
 
     /* Collecting args of `CONF`. */
     int provs_r[head_r2.nb_args];
-    while(true) { // todo: replace this `while` for error-management? (terminate)
-        int ret = read_socket(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
-        if(ret > 0) {
-            /* Received the args. */
-            PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r);
-            break;
-        } else {
-            printf("=======read_error=======len:%d\n", ret); // shouldn't happen
-            close(socket_fd);
-            return false;
-        }
+    ret = read_socket(socket_fd, &provs_r, head_r2.nb_args * sizeof(int), READ_TIMEOUT);
+    if(ret > 0) {
+        PRINT_EXTRACTED("CONF", head_r2.nb_args, provs_r);
+    } else {
+        printf("=======read_error=======len:%d\n", ret); // shouldn't happen
+        CLOSURE;
     }
 
 
@@ -424,6 +412,10 @@ bool send_err(int socket_fd, char *msg) {
     /// To send an error message (`ERR`).
     /// `msg` must be terminated with a `\0`.
 
+    pthread_mutex_lock(&mut_c_invalid);
+    count_invalid++;
+    pthread_mutex_unlock(&mut_c_invalid);
+
     size_t len = strlen(msg)+1; // add NULL char to count
     printf("......send_err: msg='%s' of size:%zu\n", msg, len);
 
@@ -432,7 +424,7 @@ bool send_err(int socket_fd, char *msg) {
     send_header(socket_fd, &head_s, sizeof(cmd_header_t));
     send_msg(socket_fd, msg, len * sizeof(char));
 
-    return true; // todo: adjust
+    return true;
 }
 
 
@@ -531,9 +523,6 @@ FCT_ARR(prot_REQ) {
     pthread_mutex_unlock(&mut_c_processed);
 
     if(len != nbr_types_res+1) {
-        pthread_mutex_lock(&mut_c_invalid);
-        count_invalid++;
-        pthread_mutex_unlock(&mut_c_invalid);
         send_err(socket_fd, "»»»»»»»»» `REQ` must refer to the right amount of resources.\0");
         *success = false;
     } else {
@@ -550,9 +539,6 @@ FCT_ARR(prot_REQ) {
         }
         if(tmp == 0) {
             pthread_mutex_unlock(&mut_c_registered);
-            pthread_mutex_lock(&mut_c_invalid);
-            count_invalid++;
-            pthread_mutex_unlock(&mut_c_invalid);
             send_err(socket_fd, "»»»»»»»»» `REQ` cannot be called on non-existent client.\0");
             *success = false;
             return;
@@ -583,9 +569,6 @@ FCT_ARR(prot_REQ) {
                 printf("sent `WAIT 1`\n");
                 break;
             case ERR:
-                pthread_mutex_lock(&mut_c_invalid);
-                count_invalid++;
-                pthread_mutex_unlock(&mut_c_invalid);
                 send_err(socket_fd, "»»»»»»»»» illogical `REQ` request.\0");
                 break;
             default:
@@ -616,15 +599,20 @@ FCT_ARR(prot_END) {
         *success = false;
     } else {
 
-        // todo: not sure about this
-        while(nb_registered_clients > 0);
-        accepting_connections = false;
 
-        /* Send confirmation (`ACK 0`). */
-        SEND_ACK(head_s);
-        PRINT_EXTRACTED("available", nbr_types_res, available);
-        free(available);
-        *success = true;
+        if(nb_registered_clients > 0) {
+            send_err(socket_fd, "Not all the clients have unregistered.\0");
+            *success = false;
+
+        } else {
+            accepting_connections = false;
+
+            /* Send confirmation (`ACK 0`). */
+            SEND_ACK(head_s);
+            PRINT_EXTRACTED("available", nbr_types_res, available);
+            free(available);
+            *success = true;
+        }
     }
 }
 
@@ -739,7 +727,7 @@ void bankAlgo(int *result, int *args) {
     int  alloc [nb_registered_clients][nbr_types_res];
     int  needed[nb_registered_clients][nbr_types_res];
     for(int j=0; j<nbr_types_res; j++)
-        work[j] = available[j];
+        work[j] = available[j]; // copy of `available` to test on hypothetical sequence
     for(int i=0; i<nb_registered_clients; i++) {
         finish[i] = false;
         for(int j=0; j<nbr_types_res; j++) {
@@ -759,7 +747,7 @@ void bankAlgo(int *result, int *args) {
         }
         if(args[j+1] > available[j]) {
             *result = WAIT;
-            PRINT_EXTRACTED("available - asked too much (pre)", nbr_types_res, available);
+            PRINT_EXTRACTED("    available - asked too much (pre)", nbr_types_res, available);
             return;
         }
 
@@ -818,11 +806,9 @@ void bankAlgo(int *result, int *args) {
             clients_list[index].alloc[j] += args[j+1];
         }
         *result = ACK;
-//        PRINT_EXTRACTED("post - available - ACK (end)", nbr_types_res, available);
-//        PRINT_EXTRACTED("post - alloc     - ACK (end)", nbr_types_res, clients_list[index].alloc);
     } else {
         *result = WAIT;
-        PRINT_EXTRACTED("available - unsafe request (post)", nbr_types_res, available);
+        PRINT_EXTRACTED("    available - unsafe request (post)", nbr_types_res, available);
     }
 
 }

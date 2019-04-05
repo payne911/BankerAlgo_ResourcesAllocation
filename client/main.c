@@ -33,13 +33,10 @@ main (int argc, char *argv[argc + 1])
         }
 
         ct_wait_server();
-
-        /* Free all the memory allocated. */
         free(client_threads);
     } else {
 
-        /* Sends an `END` to the server because an error occured. */
-        ct_wait_server(); // todo: encore le cas? tester BEGIN error
+        ct_wait_server();
     }
 
     // Affiche le journal.

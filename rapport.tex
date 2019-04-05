@@ -4,6 +4,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[french]{babel}
+\usepackage{graphicx}
 
 \title{Travail pratique \#2 - IFT-2245}
 \author{Jérémi Grenier-Berthiaumet et Olivier Lepage-Applin} 
@@ -28,6 +29,13 @@ Certaines macros ont été utilisées pour augmenter la lisibilité et rapidité
 
 Aussi, mentionnons qu'il a été apprécié de faire en sorte que l'utilisation correcte du \texttt{RNG} soit devenu un bonus puisque nous l'avions alors déjà implémenté.
 
+Finalement, pour accélérer le développement, nous avons créer un petit "infographique" qui réusmait certains points du rapport pour avoir une référence rapide.
+
+\begin{figure}
+    \includegraphics[width=\linewidth]{infographic.png}
+    \caption{Notre infographique qui nous a été fort utile.}
+    \label{fig:infog}
+\end{figure}
 
 \subsection{Sockets}
 
@@ -62,9 +70,9 @@ Finalement, il peut sembler que le tout s'exécute de façon séquentielle, mais
 
 \subsection{Côté client}
 
-Premièrement, tel que mentionné dans l'introduction, nous avons modifié le \texttt{main} afin de permettre au \textit{thread} principal de se comporter comme un client unique qui s'occupe de gérer l'initialisation du serveur avec les requêtes \texttt{BEGIN} et \texttt{CONF} dans la méthode "\texttt{ct\_init\_server}". La booléen retourné correspond au succès ou non de cette initialisation et est utilisé pour gérer correctement les erreurs. En effet, si l'initialisation ne s'est pas bien passée, alors les différents \texttt{client\_thread} ne seront même pas initialisés et la procédure se termine.
+Premièrement, tel que mentionné dans l'introduction, nous avons modifié le \texttt{main} afin de permettre au \textit{thread} principal de se comporter comme un client unique qui s'occupe de gérer l'initialisation du serveur avec les requêtes \texttt{BEGIN} et \texttt{CONF} dans la méthode "\texttt{ct\_init\_server}". Le booléen retourné correspond au succès ou non de cette initialisation et est utilisé pour gérer correctement les erreurs. En effet, si l'initialisation ne s'est pas bien passée, alors les différents \texttt{client\_thread} ne seront même pas initialisés et la procédure se termine.
 
-Deuxièmement, un sémaphore a été utilisé afin de s'assurer d'éviter du \textit{busy wait} sur la variable \texttt{count} lorsque le \textit{main thread} arrive dans la méthode `\texttt{ct\_wait\_server}` après avoir instancié tous les \texttt{client\_thread} puisque cette instanciation utilise le \textit{flag} \texttt{PTHREAD\_CREATE\_DETACHED} et on ne pouvait donc pas tout simplement utiliser un \textit{join}. Ainsi, dans `\texttt{ct\_init\_server}` on s'occupe d'instancier le sémaphore et de l'initialiser à 0. Nous aurions préféré l'initialiser à une valeur négative pour nous faciliter la tâche mais il semblerait que UNIX ne permette pas de faire cela. De plus, à chaque fois qu'un \texttt{client\_thread} envoie sa requête \texttt{CLO} au serveur, il entre dans la méthode `\texttt{terminate\_client}` qui s'occupe de faire un \texttt{sem\_post}. De cette manière, on utilise ce signal dans une boucle \texttt{while} pour vérifier si le dernier client s'était bel et bien déconnecté.
+Deuxièmement, un sémaphore a été utilisé afin de s'assurer d'éviter du \textit{busy wait} sur la variable \texttt{count} lorsque le \textit{main thread} arrive dans la méthode `\texttt{ct\_wait\_server}` après avoir instancié tous les \texttt{client\_thread} puisque cette instanciation utilise le \textit{flag} \texttt{PTHREAD\_CREATE\_DETACHED} et on ne pouvait donc pas tout simplement utiliser un \textit{join}. Ainsi, dans `\texttt{ct\_init\_server}` on s'occupe d'instancier le sémaphore et de l'initialiser à 0. De plus, à chaque fois qu'un \texttt{client\_thread} envoie sa requête \texttt{CLO} au serveur, il entre dans la méthode `\texttt{terminate\_client}` qui s'occupe de faire un \texttt{sem\_post}. De cette manière, on utilise ce signal dans une boucle \texttt{while} pour vérifier si le dernier client s'était bel et bien déconnecté.
 
 Troisièmement, la signature de la fonction \texttt{send\_request} a été modifiée pour avoir accès au \textit{struct} `client\_thread`. Cela n'était pas nécessaire, mais rendait le tout plus "\textit{clean}".
 
@@ -75,7 +83,7 @@ Une fois de plus, nous avons modifié le \texttt{main} afin de pouvoir gérer le
 
 Aussi, tel que recommandé par un des démonstrateurs, nous avons utilisé un \textit{array} de fonction pour gérer de façon un peu plus élégante les différents comportements du serveur. Cependant, nous n'avons fait cela que pour une des phases du serveur, i.e. une fois qu'il est initialisé (donc que lorsqu'il s'attends à n'obtenir que des requêtes du type \texttt{REQ}/\texttt{CLO}/\texttt{END}).
 
-La variable \texttt{nb\_registered\_clients} est utilisée pour attendre que tous les clients fassent leur \texttt{CLO} lors d'un appel à \texttt{END}. Nous utilisons le \textit{busy waiting} puisque contrairement au côté client un \textit{thread} n'atteint cet état que lorsqu'un \texttt{END} est reçu (au lieu de dès l'initialisation): la répercussion est donc, en moyenne, moins grande. Cette boucle se justifie en terme de robustesse pour si jamais un groupe de clients se connectent, mais un signifie qu'il veut fermer le serveur avant que les autres n'aient réellement terminés d'envoyer toutes leurs requêtes avant de se déconnecter (ce qui n'arriverait en fait pas avec \textit{notre} client).
+La variable \texttt{nb\_registered\_clients} est utilisée pour s'assurer que tous les clients aient fait leur \texttt{CLO} avant d'accepter un appel à \texttt{END}. Nous renvoyons une erreur si jamais \texttt{END} est appelé sans que tous les clients se soient terminés.
 
 Finalement, les variables de statistique en lien avec \texttt{REQ} sont légèrement ouvertes à l'interprétation. Pour notre part, par exemple, s'il y avait un nombre négatif qui indiquait le nombre d'arguments d'une requête \texttt{REQ}, celle-ci n'est pas réellement comptée. Cependant, si c'est un nombre d'argument positif mais qui ne correspond pas à \texttt{num\_resources + 1}, alors celle-ci est comptée comme une erreur.
 

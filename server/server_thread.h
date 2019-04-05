@@ -65,4 +65,9 @@ static my_fct_type *enum_func[NB_COMMANDS + 1] = {
     printf(">>>>>>>>modified header for UNKNOWN<<<<<<<<\n"); \
     header->cmd = NB_COMMANDS;   /* assign the error function */ \
     enum_func[header->cmd](socket_fd, &success, NULL, header->nb_args)
+
+#define CLOSURE \
+    close(socket_fd); \
+    return false
+
 #endif
